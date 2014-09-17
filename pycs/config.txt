@@ -1,0 +1,35 @@
+[section1]
+  val=7
+[key-domain]
+  srcip=3
+  sport=4
+  dstip=5
+  dport=6
+  proto_name=7
+  proto_num=8
+  ifname=9
+  rxpkt=11
+  rxsize=12
+  txpkt=14
+  txsize=15
+  syn=17
+  synack=19
+
+[auto-grp]
+  [[agrp1]]
+    dm1=port
+    dm2=dstip
+
+  [[agrp2]]
+    dm1=srcip
+    dm2=protocol
+
+
+[spc-grp]
+  [[sgrp1]]
+    srcip=172.16.0.0/24
+    [[[agrp]]]
+      dm1=sport
+
+
+

@@ -23,23 +23,53 @@ counter = 0
 #-- Give screen module scope
 screen = None
 
+class munu_item():
+    def __init__(self, func, args = None):
+        self.func = func
+        self.args = args
+
+    def run(self):
+        self.func(self.args)
+
 #-- Create the topbar menu
 def topbar_menu(menus):
-    left = 2
+    max_yx = screen.getmaxyx()
+
+    left_sp = 2
+    right_sp = 2
+    app_title=">>>>>>>Pktstat Interface  "
+
+
+    mlen = len(menus)
+    min_len = len(app_title) + left_sp + right_sp 
+    for menu in menus:
+        menu_name = menu[0]
+        min_len += len(menu_name) + 1
+
+    if max_yx[1] < min_len:
+        print "Error: screen's width is too short!"
+        return 1
+
+    left = left_sp
+    msplice = (max_yx[1] - min_len) / mlen
+
     for menu in menus:
         menu_name = menu[0]
         menu_hotkey = menu_name[0]
         menu_no_hot = menu_name[1:]
         screen.addstr(1, left, menu_hotkey, hotkey_attr)
         screen.addstr(1, left+1, menu_no_hot, menu_attr)
-        left = left + len(menu_name) + 3
+        left = left + len(menu_name) + msplice 
         # Add key handlers for this hotkey
         topbar_key_handler((string.upper(menu_hotkey), menu[1]))
         topbar_key_handler((string.lower(menu_hotkey), menu[1]))
+
     # Little aesthetic thing to display application title
-    screen.addstr(1, left-1,
-                  ">"*(52-left)+ " Txt2Html Curses Interface",
-                  curses.A_STANDOUT)
+    screen.addstr(1, max_yx[1] - len(app_title) - 1,
+                  app_title)
+                  #">"*(52-left)+ "Pktstat Interface",
+                   #curses.A_STANDOUT)
+                  #curses.color_pair(2))
     screen.refresh()
 
 #-- Magic key handler both loads and processes keys strokes
@@ -54,7 +84,8 @@ def topbar_key_handler(key_assign=None, key_dict={}):
             curses.beep()
             return 1
         else:
-            return eval(key_dict[c])
+            rv = eval(key_dict[c])
+            return rv
 
 #-- Handlers for the topbar menus
 def help_func():
@@ -83,7 +114,9 @@ def help_func():
     return CONTINUE
 
 def file_func():
-    s = curses.newwin(5,10,2,1)
+    #s = curses.newwin(5,10,10,20)
+    #s = screen.derwin(10, 10, 1, 2)
+    s = screen.subwin(5,10,10,20)
     s.box()
     s.addstr(1,2, "I", hotkey_attr)
     s.addstr(1,3, "nput", menu_attr)
@@ -191,9 +224,15 @@ def draw_dict():
 def main(stdscr):
     # Frame the interface area at fixed VT100 size
     global screen
-    screen = stdscr.subwin(23, 79, 0, 0)
+    bottom = curses.LINES
+    sleft = curses.COLS
+    hight = bottom - 10
+    width = sleft - 20
+    hstart = (bottom - hight) / 2
+    lstart = (sleft - width) / 2
+    screen = stdscr.subwin(hight, width, hstart, lstart)
     screen.box()
-    screen.hline(2, 1, curses.ACS_HLINE, 77)
+    screen.hline(2, 1, curses.ACS_HLINE, width - 2)
     screen.refresh()
 
     # Define the topbar menus
@@ -224,7 +263,7 @@ if __name__=='__main__':
     try:
         # Initialize curses
         stdscr=curses.initscr()
-        #curses.start_color()
+        curses.start_color()
         # Turn off echoing of keys, and enter cbreak mode,
         # where no buffering is performed on keyboard input
         curses.noecho() ; curses.cbreak()

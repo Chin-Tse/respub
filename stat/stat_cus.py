@@ -23,14 +23,121 @@ counter = 0
 #-- Give screen module scope
 screen = None
 
-class munu_item():
-    def __init__(self, func, args = None):
-        self.func = func
-        self.args = args
+class menu_item():
+  def __init__(self, s, args = None):
+    self.name = args[0]
+    self.func = args[1]
+    self.args = args[2:]
+    self.y = 0
+    self.x = 0
+    self.h = 0
+    self.w = 0
+    self.sub_top = 0
+    self.sub_bottom = 0
+    self.sub_left = 0
+    self.sub_right = 0
 
-    def run(self):
-        self.func(self.args)
+  def getyx(self):
+    return (self.y, self.x)
+  
+  def setyx(self, y, x):
+    (self.y, self.x) = (y, x)
 
+  def resize(self, h, w):
+    (self.h, self.w) = (h, w)
+
+  def getmaxyx(self):
+    return (self.y + h, self.x + w)
+
+  def setlimit(self, t, b, l, r):
+    (self.sub_left, self.sub_right, self.sub_top, self.sub_bottom) = (l, r, t, b)
+  
+  def getsublimit(self):
+    return (self.sub_left, self.sub_right, self.sub_top, self.sub_bottom )
+
+  def run(self):
+    self.func(self.args)
+
+
+class menu_grp():
+  def __init__(self, parent_item, direction, items):
+    self.direction = direction
+    self.items = items
+
+    if direction == None:
+      self.direction = 'vr'
+    #items organize in horizontal
+    if  direction[0] == 'h':
+      self.h = 1
+      mw = 1
+      for item in tiems:
+        mw += len (item[0]) + 1
+        self.w = mw
+    else:
+      maxname = 0
+      for item in tiems:
+        if len (item[0]) > maxname: 
+          maxname = len(item[0])
+          self.w = maxname
+    # calc yx
+    self.py = self.px = 0
+    self.my = self.mx = 0
+    self.top = self.bottom = 0
+    self.left = self.right = 0
+
+    if parent_item != None:
+      self.py, self.px = parent.getyx()
+      self.my, self.mx = parent.getmaxyx()
+      self.left, self.right, self.top, self.bottom = parent.getsublimit()
+    else:
+      self.py, self.px = screen.getyx()
+      self.my, self.mx = (self.py, self.px + 1)
+      self.top, self.left, self.bottom, self.right= screen.getyx(), screen.getmaxyx()
+
+    if self.direction[1] == 'd':
+      self.x = self.px
+      self.y = self.my
+    elif self.direction[1] == 'u':
+      self.x = self.px
+      self.y = self.py - self.h
+    elif self.direction[1] == 'l':
+      self.x = self.px - self.w
+      if self.my - self.h > self.top:
+        self.y = self.my - self.h
+      else:
+        self.y = self.top
+    else: 
+      self.x = self.mx 
+      if self.my - self.h > self.top:
+        self.y = self.my - self.h
+      else:
+        self.y = self.top
+
+  def key_handler(self, kef_assign=None, key_dict={}):
+    pass
+    
+  def run(self):
+    self.s = screen.subwin(self.h, self.w, self.y, self.x)
+    s.box()
+    mmove = 0
+    for item in self.items:
+      tmp = menu_item(s, item)
+      menu_name = tmp.name
+      menu_hotkey = menu_name[0]
+      menu_no_hot = menu_name[1:]
+      if self.direction[0] == 'h':
+        s.addstr(self.y, self.x + mmove, menu_hotkey, hotkey_attr)
+        s.addstr(self.y, self.x + mmove + 1, menu_no_hot, menu_attr)
+        tmp.x = self.x + mmove;
+        mmove += len(menu_name) + 1
+      else:
+        s.addstr(self.y + mmove, self.x, menu_hotkey, hotkey_attr)
+        s.addstr(self.y + mmove, self.x + 1, menu_no_hot, menu_attr)
+        mmove += 1
+    #wait for keyinput
+
+
+           
 #-- Create the topbar menu
 def topbar_menu(menus):
     max_yx = screen.getmaxyx()
@@ -61,8 +168,8 @@ def topbar_menu(menus):
         screen.addstr(1, left+1, menu_no_hot, menu_attr)
         left = left + len(menu_name) + msplice 
         # Add key handlers for this hotkey
-        topbar_key_handler((string.upper(menu_hotkey), menu[1]))
-        topbar_key_handler((string.lower(menu_hotkey), menu[1]))
+        topbar_key_handler((string.upper(menu_hotkey), menu[1], menu[2]))
+        topbar_key_handler((string.lower(menu_hotkey), menu[1], menu[2]))
 
     # Little aesthetic thing to display application title
     screen.addstr(1, max_yx[1] - len(app_title) - 1,
@@ -73,9 +180,10 @@ def topbar_menu(menus):
     screen.refresh()
 
 #-- Magic key handler both loads and processes keys strokes
-def topbar_key_handler(key_assign=None, key_dict={}):
+def topbar_key_handler(key_assign=None, key_dict={}, arg_dict={}):
     if key_assign:
         key_dict[ord(key_assign[0])] = key_assign[1]
+        arg_dict[ord(key_assign[0])] = key_assign[2]
     else:
         c = screen.getch()
         if c in (curses.KEY_END, ord('!')):
@@ -84,11 +192,14 @@ def topbar_key_handler(key_assign=None, key_dict={}):
             curses.beep()
             return 1
         else:
-            rv = eval(key_dict[c])
-            return rv
+          #rv = eval(key_dict[c])
+          print key_dict[c] + '(' + arg_dict[c].__str__() + ')'
+          eval(key_dict[c] + '(' + arg_dict[c].__str__() + ')')
+
+          return 1
 
 #-- Handlers for the topbar menus
-def help_func():
+def help_func(args=None):
     help_lines = []
     offset = 0
     fh_help = open('txt2html.txt')
@@ -113,10 +224,10 @@ def help_func():
     s.erase()
     return CONTINUE
 
-def file_func():
+def file_func(args):
     #s = curses.newwin(5,10,10,20)
     #s = screen.derwin(10, 10, 1, 2)
-    s = screen.subwin(5,10,10,20)
+    s = curses.newwin(5,10,10,20)
     s.box()
     s.addstr(1,2, "I", hotkey_attr)
     s.addstr(1,3, "nput", menu_attr)
@@ -174,7 +285,7 @@ def file_func():
         s.erase()
     return CONTINUE
 
-def doit_func():
+def doit_func(args=None):
     global counter
     counter = counter+1
     if cfg_dict['type'] == 'INFER':
@@ -183,7 +294,7 @@ def doit_func():
     #dmTxt2Html.main(cfg_dict)
     return CONTINUE
 
-def proxy_func():
+def proxy_func(args=None):
     s = curses.newwin(6, 15, 2, 8)
     s.box()
     s.addstr(1, 2, "P", hotkey_attr)
@@ -236,11 +347,11 @@ def main(stdscr):
     screen.refresh()
 
     # Define the topbar menus
-    file_menu = ("File", "file_func()")
-    proxy_menu = ("Proxy Mode", "proxy_func()")
-    doit_menu = ("Do It!", "doit_func()")
-    help_menu = ("Help", "help_func()")
-    exit_menu = ("Exit", "EXIT")
+    file_menu = ("File", "file_func", ('asss', 'asdf'))
+    proxy_menu = ("Proxy Mode", "proxy_func", None)
+    doit_menu = ("Do It!", "doit_func", None)
+    help_menu = ("Help", "help_func", None)
+    exit_menu = ("Exit", "EXIT", 0)
 
     # Add the topbar menus to screen object
     topbar_menu((file_menu, proxy_menu, doit_menu, help_menu, exit_menu))

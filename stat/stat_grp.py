@@ -34,7 +34,7 @@ print dtmp[2]
 
 
 
-class auto_gen_cfg(object):
+class auto_gcfg(object):
   def __init__(self, section, ksec):
     self.acfg = section
     self.alen = len(section)
@@ -54,7 +54,7 @@ class auto_gen_cfg(object):
           self.acfg_kidx[icfg].append(int(ksec[key]))
           pass
         except KeyError:
-          raise KeyError("%r, Invalid config key! %r", key, ksec.keys())
+          raise ValueError("%r, Invalid config key! %r", key, ksec.keys())
 
     print self.acfg_name
     print self.acfg_kidx
@@ -62,14 +62,38 @@ class auto_gen_cfg(object):
     
     pass
 
+class spc_gcfg(object):
+
+  def __init__(self, section, ksec):
+    self.acfg = section
+    self.alen = len(section)
+
+    self.acfg_name = []
+    self.acfg_kidx = []
+    self.acfg_key = []
+
+    self.scfg_name = []
+    self.scfg_kidx = []
+    self.scfg_key = []
+    self.scfg_comm = []
+    self.scfg_agp = []
+
+    for iscfg , scfg_item in enumerate(self.acfg):
+      self.scfg_name.append(scfg_item)
+      print self.acfg[scfg_item]
+      for icfg, acfg_item in enumerate(self.acfg[scfg_item]):
+        pass
+
+        
+    pass
 
 def parse_cfg():
   sec_opt = config['log-options']
   sec_agp = config['auto-grp']
+  sec_sgp = config['spc-grp']
   print sec_agp.values()[0][1]
-  sec_spc = config['spc-grp']
 
-  agc = auto_gen_cfg(sec_agp, sec_opt)
+  agc = auto_gcfg(sec_agp, sec_opt)
 
 
 if __name__ == "__main__":

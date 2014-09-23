@@ -1,7 +1,9 @@
 [path]
   input=/home/see/src/respub/stat/demo4.log
   output=/var/log/pkstat
-[log-options]
+
+# this domain define the log file format
+[log-format]
   srcip=3
   sport=4
   dstip=5
@@ -16,19 +18,28 @@
   syn=17
   synack=19
 
+# improve to support multi-value stat in a item latter
 [auto-grp]
-  agrp3=srcip, proto_name
-
-  agrp1=dstip, dport
-
+  agrp3=srcip, proto_name | syn | 1
+  agrp1=dstip, dport | rxpkt | 1000
 
 [spc-grp]
   [[sgrp1]]
+    # key must list in 'log-options'
+    dstip=172.16.0.0/24
+    dport=80
+    
+    #should not be the any key list in 'log-options'
+    agrp_qq = srcip, sport| rxpkt | 1000
+
+  # diffrent config item should not take a repeated name
+  # otherwise it cause fault Error
+  [[sgrp2]]
     #key must list in 'log-options'
     dstip=172.16.0.0/24
     dport=80
     
     #should not be the any key list in 'log-options'
-    agrp_qq = srcip
+    agrp_qq = srcip, sport| rxpkt | 1000
 
 

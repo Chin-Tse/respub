@@ -191,6 +191,66 @@ class spc_gcfg(object):
             
           print '---', iscfg, a_idx, self.scfg_agp[iscfg][a_idx]
 
+  # get spcfg number
+  def get_spcfg_num(self):
+    return (self.slen)
+
+  # get sidx-th spcfg's special part
+  def get_spc_name(self, sidx):
+    if sidx >= self.slen:
+      return None
+    return self.scfg_name
+    
+  def get_spc_dmlist(self, sidx):
+    if sidx >= self.slen:
+      return []    
+    return self.scfg_keyidx[sidx]
+  def get_spc_dmmatch(self, sidx):
+    if sidx >= self.slen:
+      return []    
+    return self.scfg_keymatch[sidx]
+
+  def get_spc_dmname(self, sidx):
+    if sidx >= self.slen:
+      return []    
+    return self.scfg_keyname[sidx]
+
+  def get_spcagc_num(self, sidx):
+    if sidx >= self.slen:
+      return 0
+    return self.scfg_agp[sidx][0]
+
+  def get_spcagc_name(self, sidx, aidx):
+    if sidx >= self.slen or aidxi + 1 >= self.get_spcagc_num(sidx):
+      return None
+    return self.scfg_agp[sidx][aidx + 1][0]
+ 
+  def get_spcagc_dmlist(self, sidx, aidx):
+    if sidx >= self.slen or aidxi + 1 >= self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][4]
+    
+  def get_spcagc_dmname(self, sidx, aidx):
+    if sidx >= self.slen or aidxi + 1 >= self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][5]
+  
+  def get_spcagc_statcol(self, sidx, aidx):
+    if sidx >= self.slen or aidxi + 1 >= self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][2]
+
+  def get_spcagc_statcol_name(self, sidx, aidx):
+    if sidx >= self.slen or aidxi + 1 >= self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][1]
+
+  def get_spcagc_threshold(self, sidx, aidx):
+    if sidx >= self.slen or aidxi + 1 >= self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][3]
+
+
 def getcfg(filename):
   return config
 

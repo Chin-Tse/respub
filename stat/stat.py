@@ -24,6 +24,24 @@ else:
 import stat_cfg
 from stat_cfg import auto_gcfg, spc_gcfg
 
+def stat_filter(data, cfg_fmt, dmlist, match):
+  dlen = len(dmlist)
+  mlen = len(match)
+  if dlen != mlen:
+    raise ValueError("Config Error:", dmlist, match)
+
+  cp_list = (cfg_fmt['srcip'], cfg_fmt['dstip'])
+  print cp_list
+  for dm, mt in zip(dmlist, match):
+    if dm in cp_list:
+      dtmp = data.copy()
+
+    #dtmp = data[data[dm] == mt]
+   
+
+def stat_grp(data, colist, olist):
+  pass
+
 class stat_arg(object):
   def __init__(self):
     self.pline = 0;
@@ -46,6 +64,10 @@ def stat_tm_action(args=[]):
   # read data
   data = pd.read_csv(args.logfile, header=None, parse_dates=[0], index_col=0, skiprows=args.pline)
   print len(data)
+
+  spc_dmlist = args.scfg.get_spc_dmlist(0)
+  spc_dmmatch = args.scfg.get_spc_dmmatch(0)
+  stat_filter(data, args.cfg_fmt, spc_dmlist, spc_dmmatch)
 
   # genrate dst data
 

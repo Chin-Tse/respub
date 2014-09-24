@@ -4,19 +4,19 @@
 
 # this domain define the log file format
 [log-format]
-  srcip=3
-  sport=4
-  dstip=5
-  dport=6
-  proto_name=7
-  proto_num=8
-  ifname=9
-  rxpkt=11
-  rxsize=12
-  txpkt=14
-  txsize=15
-  syn=17
-  synack=19
+  srcip=2
+  sport=3
+  dstip=4
+  dport=5
+  proto_name=6
+  proto_num=7
+  ifname=8
+  rxpkt=10
+  rxsize=11
+  txpkt=13
+  txsize=14
+  syn=16
+  synack=18
 
 # improve to support multi-value stat in a item latter
 [auto-grp]
@@ -27,7 +27,7 @@
   [[sgrp1]]
     # key must list in 'log-options'
     dstip=172.16.0.0/24
-    dport=80
+    dport=130
     
     #should not be the any key list in 'log-options'
     agrp_qq = srcip, sport| rxpkt | 1000

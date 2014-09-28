@@ -3,6 +3,7 @@
   output=/var/log/pkstat
 
 # this domain define the log file format
+# specify names for cols used by cfgitem latter
 [log-format]
   srcip=2
   sport=3
@@ -18,6 +19,23 @@
   syn=16
   synack=18
 
+# specify how much space take for each item
+# eg. 'srcip=16' would be used like %16s when output srcip content
+[outlog-format]
+  srcip=16
+  sport=6
+  dstip=16
+  dport=6
+  proto_name=10
+  proto_num=4
+  ifname=8
+  rxpkt=10
+  rxsize=12
+  txpkt=10
+  txsize=12
+  syn=10
+  synack=10
+
 # improve to support multi-value stat in a item latter
 [auto-grp]
   agrp3=srcip, proto_name | syn | 1
@@ -30,7 +48,7 @@
     dport=130
     
     #should not be the any key list in 'log-options'
-    agrp_qq = srcip, sport| rxpkt | 1000
+    agrp_qq = srcip, sport| rxpkt | 200
 
   # diffrent config item should not take a repeated name
   # otherwise it cause fault Error

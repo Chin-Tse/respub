@@ -1,8 +1,17 @@
+#!/usr/bin/python
+##
+# @file stat.py
+# @brief stat
+# @author zhoujinze, zhoujz@chinanetcenter.com
+# @version 0.0.1
+# @date 2014-09-28
+
 import pandas as pd
 import numpy as np
 import configobj
 import time
 import threading
+import copy
 
 import sys
 import types
@@ -24,12 +33,14 @@ else:
     STR_TYPES = (str, unicode)
 
 # stat parameters
+# maybe should be moved to stat_cfg module
 class stat_arg(object):
-  def __init__(self):
+  def __init__(self, cfgfile='./config.txt'):
     self.pline = 0;
-    self.cfgfile = './config.txt'
+    self.cfgfile = cfgfile
     self.config = stat_cfg.getcfg(self.cfgfile);
     self.cfg_fmt = self.config['log-format']
+    self.out_fmt = self.config['outlog-format']
     self.cfg_agp = self.config['auto-grp'], 
     self.cfg_sgp = self.config['spc-grp']
     self.logfile = self.config['path']['input']
@@ -41,6 +52,9 @@ class stat_arg(object):
     self.cfg_fmt['src_net'] = self.max_col
     self.max_col += 1
     self.cfg_fmt['dst_net'] = self.max_col
+
+  def change(self):
+    pass
  
 # process subnet thing
 def stat_prepare(data, args, spc_idx):
@@ -61,7 +75,7 @@ def stat_prepare(data, args, spc_idx):
 
   cmpstr = "True"
   for idx, dm, mt in zip(range(dlen), dmlist, match):
-    print '--------', dmlist[idx], cfg_fmt['srcip'], cfg_fmt['dstip']
+    #print '--------', dmlist[idx], cfg_fmt['srcip'], cfg_fmt['dstip']
     if dm == int(cfg_fmt['srcip']):
       dmlist[idx] = int(cfg_fmt['src_net'])
       try:
@@ -95,15 +109,64 @@ def stat_prepare(data, args, spc_idx):
   # filter out target data
   print cmpstr
   return data[eval(cmpstr)]
+
+def stat_recur_stat(df, dmlist, acfg_item):
+  dnr = 0
+  dstr = ""
+  dlen = len(dmlist)
+  if dlen < 1:
+    return dnr, dstr
+  gp = df.groupby(dmlist[0])
+  for gkey, sdf in gp:
+    val_list = list(gp.sum().loc[gkey, acfg_item.stat_cols])
+    dbgstr = str(gkey) + ":" + str(acfg_item.stat_name) + str(val_list)
+
+    # check current dm val-threshold
+    for val_idx, val in enumerate(val_list):
+      if val >= acfg_item.threshold[val_idx]:
+        #goto next level
+        break;
+    # goto next gkey directly
+    else:
+      #print 'pass:', gkey, val_list, acfg_item.threshold
+      continue
+    # button level
+    if dlen == 1:
+      idx = len(acfg_item.dmname) - 1
+      dnr += 1
+      #dstr += str(gkey) + " " + str(val_list) + "\n"
+      tmp = 15
+      fmtstr = "%%%ds============="%(tmp)
+      dstr += "%s:%s, stat %s:%s\n"\
+          %(acfg_item.dmname[idx], gkey, acfg_item.stat_name, str(val_list))
+      #print "substr:" , dnr, dstr
+      continue
+    else:
+      mstr = str(gkey) + " " + str(val_list) + "\n"
+      # goto next level
+      sublist = copy.deepcopy(dmlist[1:])
+      nr, ostr = stat_recur_stat(sdf, sublist, acfg_item)
+      if nr > 0:
+        dnr += nr
+        dstr += mstr + ostr
+
+  return dnr, dstr
   
-def stat_grp(df, agcfg_item):
-  for dm in colist:
-    gp = df.groupby(dm)
-    for gkey, mgrp in gp:
-      val_list = list(gp.sum().loc(gkey, olist))
-      dbgstr = str(gkey) + str(val_list)
+# df would be change after this process
+def stat_grp(df, acfg_item):
+  dm_len = len(acfg_item.dmlist)  
+  if dm_len < 1:
+    return
+
+  dmlist = copy.deepcopy(acfg_item.dmlist)
+  dnr, dstr = stat_recur_stat(df, dmlist, acfg_item)
+
+  if dnr > 0:
+    pass
+
+  print dnr
+  print dstr
     
-  pass
 
 def stat_print(data, olist, thd_list):
   pass
@@ -126,12 +189,13 @@ def stat_tm_action(args=[]):
   for sidx in range(slen):
     dtmp = stat_prepare(data, args, sidx)
     for aidx in range(args.scfg.get_spcagc_num(sidx)):
-      agc_item = agc_entry()
+      agc_item = acfg_entry()
       if args.scfg.get_spcagc_item(sidx, aidx, agc_item) != True:
         print "Error: Get spcagc item fail!"
         continue
       
-      print "start restructure data:", sidx, aidx, ag_dmlist, out_dmlist
+      print "start restructure data:", sidx, aidx, \
+          agc_item.dmname, agc_item.stat_name
       dtmp = stat_grp(dtmp, agc_item)
       pass
 

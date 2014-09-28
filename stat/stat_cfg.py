@@ -81,12 +81,12 @@ def parse_agpstr(string):
 ##### Maybe there should had a class define every acfg_item ####
 class acfg_entry():
   def __init__(self):
-    self.acfg_name = ""
-    self.acfg_dmlist = []
-    self.acfg_dmname = []
-    self.acfg_stat_cols = []
-    self.acfg_stat_name = []
-    self.acfg_threshold = []
+    self.name = ""
+    self.dmlist = []
+    self.dmname = []
+    self.stat_cols = []
+    self.stat_name = []
+    self.threshold = []
 
 class auto_cfg(object):
   def __init__(self, section, ksec):
@@ -135,50 +135,50 @@ class auto_cfg(object):
     return self.alen
 
   def get_acfg_name(self, aidx):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return None
     return self.acfg_name[aidx]
 
   def get_acfg_dmlist(self, aidx):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return []
     return self.acfg_kidx[aidx]
   
   def get_acfg_dmname(self, aidx):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return []
     return self.acfg_key[aidx]
   
   def get_acfg_stat_cols(self, aidx):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return []
     return self.acfg_stat_cols[aidx]
   
   def get_acfg_stat_name(self, aidx):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return []
     return self.acfg_stat_name[aidx]
   
   def get_acfg_threshold(self, aidx):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return []
     return self.acfg_threshold[aidx]
 
   def get_acfg_item(self, aidx, acfg_item):
-    if adix >= self.alen:
+    if aidx >= self.alen:
       return
 
-    acfg_item.acfg_name = self.get_acfg_name(adix)
-    acfg_item.acfg_dmlist = self.get_acfg_dmlist(adix)
-    acfg_item.acfg_dmname = self.get_acfg_dmname(adix)
-    acfg_item.acfg_stat_cols = self.get_acfg_stat_cols(adix)
-    acfg_item.acfg_stat_name = self.get_acfg_stat_name(adix)
-    acfg_item.acfg_threshold = self.get_acfg_threshold(adix)
+    acfg_item.name = self.get_acfg_name(aidx)
+    acfg_item.dmlist = self.get_acfg_dmlist(aidx)
+    acfg_item.dmname = self.get_acfg_dmname(aidx)
+    acfg_item.stat_cols = self.get_acfg_stat_cols(aidx)
+    acfg_item.stat_name = self.get_acfg_stat_name(aidx)
+    acfg_item.threshold = self.get_acfg_threshold(aidx)
 
     return
     
 class spc_gcfg(object):
-  def __init__(self, section, ksec):
+  def __init__(self, section, ksec, osec):
     self.scfg = section
     self.slen = len(section)
 
@@ -335,7 +335,7 @@ class spc_gcfg(object):
       return []
     return self.scfg_agp[sidx][aidx + 1][5]
   
-  def get_spcagc_statcol(self, sidx, aidx):
+  def get_spcagc_stat_cols(self, sidx, aidx):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return []
     return self.scfg_agp[sidx][aidx + 1][2]
@@ -353,13 +353,12 @@ class spc_gcfg(object):
   def get_spcagc_item(self, sidx, aidx, acfg_item):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return False
-    acfg_item.acfg_name = self.get_spcagc_name(sidx, adix)
-    acfg_item.acfg_dmlist = self.get_spcagc_dmlist(sidx, adix)
-    acfg_item.acfg_dmname = self.get_spcagc_dmname(sidx, adix)
-    acfg_item.acfg_stat_cols = self.get_spcagc_stat_cols(sidx, adix)
-    acfg_item.acfg_stat_name = self.get_spcagc_stat_name(sidx, adix)
-    acfg_item.acfg_threshold = self.get_spcagc_threshold(sidx, adix)
-
+    acfg_item.name = self.get_spcagc_name(sidx, aidx)
+    acfg_item.dmlist = self.get_spcagc_dmlist(sidx, aidx)
+    acfg_item.dmname = self.get_spcagc_dmname(sidx, aidx)
+    acfg_item.stat_cols = self.get_spcagc_stat_cols(sidx, aidx) 
+    acfg_item.stat_name = self.get_spcagc_stat_name(sidx, aidx) 
+    acfg_item.threshold = self.get_spcagc_threshold(sidx, aidx) 
     return True
 
 def getcfg(filename):
@@ -370,11 +369,12 @@ def parse_cfg(filename):
   sec_opt = config['log-format']
   sec_agp = config['auto-grp']
   sec_sgp = config['spc-grp']
+  out_fmt = config['outlog-format']
   return sec_path, sec_opt, sec_agp, sec_sgp
 
 if __name__ == "__main__":
   sec_path, sec_opt, sec_agp, sec_sgp = parse_cfg('./config.txt')
-  spc = spc_gcfg(sec_sgp, sec_opt)
+  spc = spc_gcfg(sec_sgp, sec_opt, out_fmt)
   print '================='
   agc = auto_cfg(sec_agp, sec_opt)
 

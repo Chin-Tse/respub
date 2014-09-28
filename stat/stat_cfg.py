@@ -84,52 +84,68 @@ class acfg_entry():
     self.name = ""
     self.dmlist = []
     self.dmname = []
+    self.dm_space = []
     self.stat_cols = []
     self.stat_name = []
+    self.stat_space = []
     self.threshold = []
 
 class auto_cfg(object):
-  def __init__(self, section, ksec):
+  def __init__(self, section, icfg, ocfg):
     self.acfg = section
     self.alen = len(section)
     self.acfg_name = []
     self.acfg_stat_name= []
     self.acfg_stat_cols= []
     self.acfg_threshold = []
+    self.acfg_stat_space = []
     self.acfg_kidx = []
     self.acfg_key = []
+    self.dm_space = []
 
-    for icfg, acfg_item in enumerate(self.acfg):
+    for aidx, acfg_item in enumerate(self.acfg):
       #cfg-name
       print self.acfg[acfg_item]
       keylist, value, threshold = parse_agpstr(self.acfg[acfg_item])
       self.acfg_name.append(acfg_item)
       self.acfg_stat_name.append([])
       self.acfg_stat_cols.append([])
+      self.acfg_stat_space.append([])
       self.acfg_threshold.append([])
 
       for v, t in zip(value, threshold):
-        if v in ksec.keys():
-          self.acfg_stat_name[icfg].append(v)
-          self.acfg_stat_cols[icfg].append(ksec[v])
-          self.acfg_threshold[icfg].append(int(t))
+        if v in icfg.keys():
+          self.acfg_stat_name[aidx].append(v)
+          self.acfg_stat_cols[aidx].append(icfg[v])
+          self.acfg_threshold[aidx].append(int(t))
         else:
           raise ValueError("Config do not have a right format!", str(self.acfg[acfg_item]))
 
+        if v in ocfg.keys():
+          self.acfg_stat_space[aidx].append(int(ocfg[v]))
+        else:
+          self.acfg_stat_space[aidx].append(10)
+
       self.acfg_kidx.append([])
       self.acfg_key.append([])
+      self.dm_space.append([])
 
       for ikey, key in enumerate(keylist):
         try:
           #print ikey, key
-          self.acfg_key[icfg].append(key)
-          self.acfg_kidx[icfg].append(int(ksec[key]))
+          self.acfg_key[aidx].append(key)
+          self.acfg_kidx[aidx].append(int(icfg[key]))
           pass
         except KeyError:
-          raise ValueError("%r, Invalid config key! %r", key, ksec.keys())
+          raise ValueError("%r, Invalid config key! %r", key, icfg.keys())
 
-      print "acfg:", icfg, self.acfg_name, self.acfg_key[icfg], self.acfg_kidx[icfg], \
-          self.acfg_stat_name[icfg], self.acfg_stat_cols[icfg], self.acfg_threshold[icfg]
+        if key in ocfg.keys():
+          self.dm_space[aidx].append(int(ocfg[key]))
+        else:
+          self.dm_space[aidx].append(10)
+
+      print "acfg:", aidx, self.acfg_name, self.acfg_key[aidx], self.acfg_kidx[aidx], \
+          self.acfg_stat_name[aidx], self.acfg_stat_cols[aidx], self.acfg_threshold[aidx]
 
   def get_acfg_num(self):
     return self.alen
@@ -149,6 +165,11 @@ class auto_cfg(object):
       return []
     return self.acfg_key[aidx]
   
+  def get_acfg_dm_space(self, aidx):
+    if aidx >= self.alen:
+      return []
+    return self.dm_space[aidx]
+ 
   def get_acfg_stat_cols(self, aidx):
     if aidx >= self.alen:
       return []
@@ -164,6 +185,12 @@ class auto_cfg(object):
       return []
     return self.acfg_threshold[aidx]
 
+  def get_acfg_stat_space(self, aidx):
+    if aidx >= self.alen:
+      return []
+    return self.acfg_stat_name[aidx]
+
+
   def get_acfg_item(self, aidx, acfg_item):
     if aidx >= self.alen:
       return
@@ -171,14 +198,16 @@ class auto_cfg(object):
     acfg_item.name = self.get_acfg_name(aidx)
     acfg_item.dmlist = self.get_acfg_dmlist(aidx)
     acfg_item.dmname = self.get_acfg_dmname(aidx)
+    acfg_item.dm_space = self.get_acfg_dm_space(aidx)
     acfg_item.stat_cols = self.get_acfg_stat_cols(aidx)
     acfg_item.stat_name = self.get_acfg_stat_name(aidx)
+    acfg_item.stat_space = self.get_acfg_stat_space(aidx)
     acfg_item.threshold = self.get_acfg_threshold(aidx)
 
     return
     
 class spc_gcfg(object):
-  def __init__(self, section, ksec, osec):
+  def __init__(self, section, icfg, ocfg):
     self.scfg = section
     self.slen = len(section)
 
@@ -203,10 +232,10 @@ class spc_gcfg(object):
       print self.scfg[scfg_item]
       for iagp, agp_item in enumerate(self.scfg[scfg_item]):
         #print iagp, agp_item, self.scfg[scfg_item][agp_item]
-        if agp_item in ksec.keys():
+        if agp_item in icfg.keys():
           try:
             self.scfg_keyname[iscfg].append(agp_item)
-            self.scfg_keyidx[iscfg].append(int(ksec[agp_item]))
+            self.scfg_keyidx[iscfg].append(int(icfg[agp_item]))
             self.scfg_keymatch[iscfg].append(self.scfg[scfg_item][agp_item])
           except:
             pass
@@ -229,16 +258,22 @@ class spc_gcfg(object):
           self.scfg_agp[iscfg][a_idx].append([])
           #stat threshold
           self.scfg_agp[iscfg][a_idx].append([])
+          #stat space
+          self.scfg_agp[iscfg][a_idx].append([])
           
           for v, t in zip(colname_list, thrd_list):
-            if v in ksec.keys():
+            if v in icfg.keys():
               self.scfg_agp[iscfg][a_idx][1].append(v)
-              self.scfg_agp[iscfg][a_idx].append([])
-              self.scfg_agp[iscfg][a_idx][2].append(int(ksec[v]))
-              self.scfg_agp[iscfg][a_idx].append([])
+              self.scfg_agp[iscfg][a_idx][2].append(int(icfg[v]))
               self.scfg_agp[iscfg][a_idx][3].append(int(t))
             else:
-              raise ValueError("Config do not have a right format!", str(self.scfg[scfg_item][agp_item]))
+              raise ValueError("Config do not have a right format!", \
+                  str(self.scfg[scfg_item][agp_item]))
+
+            if v in ocfg.keys():
+              self.scfg_agp[iscfg][a_idx][4].append(int(ocfg[v]))
+            else:
+              self.scfg_agp[iscfg][a_idx][4].append(10)
 
           #keyidx list and keyname list
           self.scfg_agp[iscfg][a_idx].append([])
@@ -248,10 +283,15 @@ class spc_gcfg(object):
           # i don't know how to use maroc now, so 4/5...
           for ikey, key in enumerate(list(keylist)):
             try:
-              self.scfg_agp[iscfg][a_idx][4].append(int(ksec[key]))
-              self.scfg_agp[iscfg][a_idx][5].append(key)
+              self.scfg_agp[iscfg][a_idx][5].append(int(icfg[key]))
+              self.scfg_agp[iscfg][a_idx][6].append(key)
             except:
               pass
+
+            if key in ocfg.keys():
+              self.scfg_agp[iscfg][a_idx][7].append(int(ocfg[key]))
+            else:
+              self.scfg_agp[iscfg][a_idx][7].append(10)
             
           print 'scfgapc:', iscfg, a_idx, self.scfg_agp[iscfg][a_idx]          
         
@@ -328,12 +368,12 @@ class spc_gcfg(object):
   def get_spcagc_dmlist(self, sidx, aidx):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return []
-    return self.scfg_agp[sidx][aidx + 1][4]
+    return self.scfg_agp[sidx][aidx + 1][5]
     
   def get_spcagc_dmname(self, sidx, aidx):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return []
-    return self.scfg_agp[sidx][aidx + 1][5]
+    return self.scfg_agp[sidx][aidx + 1][6]
   
   def get_spcagc_stat_cols(self, sidx, aidx):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
@@ -349,7 +389,13 @@ class spc_gcfg(object):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return []
     return self.scfg_agp[sidx][aidx + 1][3]
+ 
+  def get_spcagc_space(self, sidx, aidx):
+    if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][4]
   
+ 
   def get_spcagc_item(self, sidx, aidx, acfg_item):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return False
@@ -358,6 +404,7 @@ class spc_gcfg(object):
     acfg_item.dmname = self.get_spcagc_dmname(sidx, aidx)
     acfg_item.stat_cols = self.get_spcagc_stat_cols(sidx, aidx) 
     acfg_item.stat_name = self.get_spcagc_stat_name(sidx, aidx) 
+    acfg_item.stat_space = self.get_spcagc_space(sidx, aidx) 
     acfg_item.threshold = self.get_spcagc_threshold(sidx, aidx) 
     return True
 

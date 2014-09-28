@@ -45,7 +45,7 @@ class stat_arg(object):
     self.cfg_sgp = self.config['spc-grp']
     self.logfile = self.config['path']['input']
     print self.logfile
-    self.scfg = spc_gcfg(self.cfg_sgp, self.cfg_fmt)
+    self.scfg = spc_gcfg(self.cfg_sgp, self.cfg_fmt, self.out_fmt)
     self.max_col = 0
     self.max_col = max(int(col) for col in self.cfg_fmt.values()) 
     self.max_col += 1
@@ -54,6 +54,7 @@ class stat_arg(object):
     self.cfg_fmt['dst_net'] = self.max_col
 
   def change(self):
+    #check cfgfile change date
     pass
  
 # process subnet thing

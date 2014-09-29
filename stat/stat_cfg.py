@@ -27,8 +27,6 @@ else:
 
 
 global config
-cfgfile = './config.txt'
-config = ConfigObj(cfgfile)
 
 # convert like "abc, cde, dcc, 10" -> ['abc', 'cde', 'ddc', 10]
 def string2list(lstr):
@@ -85,10 +83,33 @@ class acfg_entry():
     self.dmlist = []
     self.dmname = []
     self.dm_space = []
+    self.pre_space = []
+    self.dm2stat_space = []
     self.stat_cols = []
     self.stat_name = []
     self.stat_space = []
     self.threshold = []
+  
+  #format output, calculate the space number
+  def set_space(self):
+    for idx, name in enumerate(self.dmname):
+      if idx == 0:
+        sp = 0
+      else:
+        sp = 1 + self.pre_space[idx - 1] \
+            + len(self.dmname[idx - 1]) + self.dm_space[idx -1]
+
+      self.pre_space.append(sp)
+
+    stat_start = self.pre_space[-1] + len(self.dmname[-1]) \
+        + self.dm_space[-1] + 8
+    
+    for idx, name in enumerate(self.dmname):
+      sp = stat_start \
+          - self.pre_space[idx] - len(self.dmname[idx]) \
+          - self.dm_space[idx]
+
+      self.dm2stat_space.append(sp)
 
 class auto_cfg(object):
   def __init__(self, section, icfg, ocfg):
@@ -193,7 +214,7 @@ class auto_cfg(object):
 
   def get_acfg_item(self, aidx, acfg_item):
     if aidx >= self.alen:
-      return
+      return False
 
     acfg_item.name = self.get_acfg_name(aidx)
     acfg_item.dmlist = self.get_acfg_dmlist(aidx)
@@ -204,7 +225,9 @@ class auto_cfg(object):
     acfg_item.stat_space = self.get_acfg_stat_space(aidx)
     acfg_item.threshold = self.get_acfg_threshold(aidx)
 
-    return
+    acfg_item.set_space()
+   
+    return True
     
 class spc_gcfg(object):
   def __init__(self, section, icfg, ocfg):
@@ -325,7 +348,7 @@ class spc_gcfg(object):
   def get_spc_name(self, sidx):
     if sidx >= self.slen:
       return None
-    return self.scfg_name
+    return self.scfg_name[sidx]
     
   def get_spc_dmlist(self, sidx):
     if sidx >= self.slen:
@@ -361,7 +384,7 @@ class spc_gcfg(object):
     return self.scfg_agp[sidx][0]
 
   def get_spcagc_name(self, sidx, aidx):
-    if sidx >= self.slen or aidx + 1 >= self.get_spcagc_num(sidx):
+    if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return None
     return self.scfg_agp[sidx][aidx + 1][0]
  
@@ -390,11 +413,15 @@ class spc_gcfg(object):
       return []
     return self.scfg_agp[sidx][aidx + 1][3]
  
-  def get_spcagc_space(self, sidx, aidx):
+  def get_spcagc_stat_space(self, sidx, aidx):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
       return []
     return self.scfg_agp[sidx][aidx + 1][4]
   
+  def get_spcagc_dm_space(self, sidx, aidx):
+    if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
+      return []
+    return self.scfg_agp[sidx][aidx + 1][7]
  
   def get_spcagc_item(self, sidx, aidx, acfg_item):
     if sidx >= self.slen or aidx + 1 > self.get_spcagc_num(sidx):
@@ -402,26 +429,34 @@ class spc_gcfg(object):
     acfg_item.name = self.get_spcagc_name(sidx, aidx)
     acfg_item.dmlist = self.get_spcagc_dmlist(sidx, aidx)
     acfg_item.dmname = self.get_spcagc_dmname(sidx, aidx)
+    acfg_item.dm_space= self.get_spcagc_dm_space(sidx, aidx)
     acfg_item.stat_cols = self.get_spcagc_stat_cols(sidx, aidx) 
     acfg_item.stat_name = self.get_spcagc_stat_name(sidx, aidx) 
-    acfg_item.stat_space = self.get_spcagc_space(sidx, aidx) 
+    acfg_item.stat_space = self.get_spcagc_stat_space(sidx, aidx) 
     acfg_item.threshold = self.get_spcagc_threshold(sidx, aidx) 
+
+    acfg_item.set_space()
     return True
 
 def getcfg(filename):
+  global config
+  config = ConfigObj(filename)
   return config
 
 def parse_cfg(filename):
+  global config
+  config = ConfigObj(filename)
   sec_path = config['path']
   sec_opt = config['log-format']
   sec_agp = config['auto-grp']
   sec_sgp = config['spc-grp']
   out_fmt = config['outlog-format']
-  return sec_path, sec_opt, sec_agp, sec_sgp
+  return sec_path, sec_opt, sec_agp, sec_sgp, out_fmt
 
+cfgfile = './config.txt'
 if __name__ == "__main__":
-  sec_path, sec_opt, sec_agp, sec_sgp = parse_cfg('./config.txt')
+  sec_path, sec_opt, sec_agp, sec_sgp, out_fmt = parse_cfg(cfgfile)
   spc = spc_gcfg(sec_sgp, sec_opt, out_fmt)
   print '================='
-  agc = auto_cfg(sec_agp, sec_opt)
+  agc = auto_cfg(sec_agp, sec_opt, out_fmt)
 

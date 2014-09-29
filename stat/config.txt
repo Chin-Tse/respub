@@ -1,6 +1,6 @@
 [path]
   input=/home/see/src/respub/stat/demo4.log
-  output=/var/log/pkstat
+  output=/tmp/log/pkstat
 
 # this domain define the log file format
 # specify names for cols used by cfgitem latter

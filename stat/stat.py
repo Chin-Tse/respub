@@ -9,6 +9,7 @@
 import pandas as pd
 import numpy as np
 import configobj
+import os
 import time
 import threading
 import copy
@@ -38,13 +39,53 @@ class stat_arg(object):
   def __init__(self, cfgfile='./config.txt'):
     self.pline = 0;
     self.cfgfile = cfgfile
+    self.cfgtime = (os.stat(self.cfgfile).st_mtime)
     self.config = stat_cfg.getcfg(self.cfgfile);
+    self.cfg_fmt = self.config['log-format']
+    self.out_fmt = self.config['outlog-format']
+    self.cfg_agp = self.config['auto-grp'] 
+    self.cfg_sgp = self.config['spc-grp']
+    self.input_log = self.config['path']['input']
+    self.output_log = self.config['path']['output']
+    opath = os.path.dirname(self.output_log)
+    if os.path.exists(opath) == False:
+      os.makedirs(opath)
+    self.output_fd = open(self.output_log, 'w')
+    self.scfg = spc_gcfg(self.cfg_sgp, self.cfg_fmt, self.out_fmt)
+    self.acfg = auto_cfg(self.cfg_agp, self.cfg_fmt, self.out_fmt)
+    self.max_col = 0
+    self.max_col = max(int(col) for col in self.cfg_fmt.values()) 
+    self.max_col += 1
+    self.cfg_fmt['src_net'] = self.max_col
+    self.max_col += 1
+    self.cfg_fmt['dst_net'] = self.max_col
+
+  def chkcfg(self):
+    #check cfgfile change date
+    if self.cfgtime == (os.stat(self.cfgfile).st_mtime):
+      return
+    
+    self.cfgtime = (os.stat(self.cfgfile).st_mtime)
+    # reload config file
+    self.config.reload()
     self.cfg_fmt = self.config['log-format']
     self.out_fmt = self.config['outlog-format']
     self.cfg_agp = self.config['auto-grp'], 
     self.cfg_sgp = self.config['spc-grp']
-    self.logfile = self.config['path']['input']
-    print self.logfile
+
+    #pline
+    if self.input_log != self.config['path']['input']:
+      self.pline = 0
+      self.input_log = self.config['path']['input']
+    if self.output_log != self.config['path']['output']:
+      self.output_log = self.config['path']['output']
+      opath = os.path.dirname(self.output_log)
+      if os.path.exists(opath) == False:
+        os.makedirs(opath)
+      self.output_fd.close()
+      self.output_fd = open(self.output_log, 'w')
+    print self.input_log
+    #xxxx: maybe cause mem leak here, don't care now
     self.scfg = spc_gcfg(self.cfg_sgp, self.cfg_fmt, self.out_fmt)
     self.max_col = 0
     self.max_col = max(int(col) for col in self.cfg_fmt.values()) 
@@ -53,9 +94,12 @@ class stat_arg(object):
     self.max_col += 1
     self.cfg_fmt['dst_net'] = self.max_col
 
-  def change(self):
-    #check cfgfile change date
+  # check outlog size and inputlog size
+  def chksize(self):
     pass
+
+  def write(self, hdr, dstr):
+    self.output_fd.writelines([hdr, "---------------\n", dstr])
  
 # process subnet thing
 def stat_prepare(data, args, spc_idx):
@@ -108,13 +152,14 @@ def stat_prepare(data, args, spc_idx):
     cmpstr = cmpstr + strtmp
 
   # filter out target data
-  print cmpstr
+  #print cmpstr
   return data[eval(cmpstr)]
 
 def stat_recur_stat(df, dmlist, acfg_item):
   dnr = 0
   dstr = ""
   dlen = len(dmlist)
+  dmidx = len(acfg_item.dmlist) - dlen
   if dlen < 1:
     return dnr, dstr
   gp = df.groupby(dmlist[0])
@@ -133,17 +178,29 @@ def stat_recur_stat(df, dmlist, acfg_item):
       continue
     # button level
     if dlen == 1:
-      idx = len(acfg_item.dmname) - 1
       dnr += 1
-      #dstr += str(gkey) + " " + str(val_list) + "\n"
-      tmp = 15
-      fmtstr = "%%%ds============="%(tmp)
-      dstr += "%s:%s, stat %s:%s\n"\
-          %(acfg_item.dmname[idx], gkey, acfg_item.stat_name, str(val_list))
-      #print "substr:" , dnr, dstr
+      dstr += "%*s:%*s"\
+          %(acfg_item.pre_space[dmidx] + len(acfg_item.dmname[dmidx]),\
+          acfg_item.dmname[dmidx], \
+          acfg_item.dm_space[dmidx], gkey)
+      
+      # value output
+      for vidx, val in enumerate(val_list):
+        if vidx == 0:
+          dstr += "%*d"%(acfg_item.dm2stat_space[dmidx] + acfg_item.stat_space[vidx], val)
+        else:
+          dstr += "%*d"%(acfg_item.stat_space[vidx], val)
+      dstr += "\n"
       continue
     else:
-      mstr = str(gkey) + " " + str(val_list) + "\n"
+      mstr = "%-*s:%-*s"%(acfg_item.pre_space[dmidx], acfg_item.dmname[dmidx], \
+          acfg_item.dm_space[dmidx], str(gkey))
+      for vidx, val in enumerate(val_list):
+        if vidx == 0:
+          mstr += "%*d"%(acfg_item.dm2stat_space[dmidx] + acfg_item.stat_space[vidx], val)
+        else:
+          mstr += "%*s"%(acfg_item.stat_space[vidx], val)
+      mstr += "\n"
       # goto next level
       sublist = copy.deepcopy(dmlist[1:])
       nr, ostr = stat_recur_stat(sdf, sublist, acfg_item)
@@ -162,16 +219,27 @@ def stat_grp(df, acfg_item):
   dmlist = copy.deepcopy(acfg_item.dmlist)
   dnr, dstr = stat_recur_stat(df, dmlist, acfg_item)
 
+  hdr = ""
+  agc_hdr = ""
   if dnr > 0:
-    pass
+    agc_hdr += str(acfg_item.name) + ":\n"
+    for idx, name in enumerate(acfg_item.dmname):
+      hdr_len = len(hdr)
+      sp = acfg_item.pre_space[idx] - hdr_len + acfg_item.dm_space[idx]
+      hdr += "%*s"%(sp, name)
 
-  print dnr
-  print dstr
-    
+    for idx, name in enumerate(acfg_item.stat_name):
+      if idx == 0:
+        sp = acfg_item.dm_space[-1] + acfg_item.dm2stat_space[-1] \
+            + acfg_item.stat_space[idx]
+      else:
+        sp = acfg_item.stat_space[idx]
+      hdr += "%*s"%(sp, name)
+    hdr = agc_hdr + hdr + "\n"
+    # ouput to output logfile
 
-def stat_print(data, olist, thd_list):
-  pass
-   
+  return dnr, hdr, dstr
+
 def stat_tm_action(args=[]):
   print 'timeout:'
   #arg = args[0]
@@ -180,33 +248,62 @@ def stat_tm_action(args=[]):
   t.start()
 
   # read data
-  #data = pd.read_csv(args.logfile, header=None, nrows=100, parse_dates=[0], skiprows=args.pline)
-  print args.logfile
-  data = pd.read_csv(args.logfile, header=None, nrows=100, parse_dates=[0], skiprows=args.pline)
-  
+  print args.input_log
+  try:
+    data = pd.read_csv(args.input_log, header=None, \
+        nrows=120, parse_dates=[0], skiprows=args.pline)
 
+    data_len = len(data)
+    args.pline += data_len
+  except:
+    print "Input Logfile End......"
+    return
+  
   slen = args.scfg.get_spcfg_num()
-  print "slen:", slen 
+  #print "slen:", slen 
+  agc_item = acfg_entry()
+ 
+  alen = args.acfg.get_acfg_num()
+  for aidx in range(alen):
+    if args.acfg.get_acfg_item(aidx, agc_item) != True:
+      print "Error: Get spcagc item fail!"
+      continue
+
+    print "start stat agp_data:", aidx, \
+        agc_item.dmname, agc_item.stat_name
+    dnr, hdr, dstr = stat_grp(data, agc_item)
+    #wirte to file
+    if dnr > 0:
+      hdr = sghdr + hdr
+      args.write(hdr, dstr)
+      print hdr
+      print dstr
+
   for sidx in range(slen):
     dtmp = stat_prepare(data, args, sidx)
+    sghdr =""
+    sghdr = args.scfg.get_spc_name(sidx) + ":"
     for aidx in range(args.scfg.get_spcagc_num(sidx)):
-      agc_item = acfg_entry()
       if args.scfg.get_spcagc_item(sidx, aidx, agc_item) != True:
         print "Error: Get spcagc item fail!"
         continue
       
       print "start restructure data:", sidx, aidx, \
           agc_item.dmname, agc_item.stat_name
-      dtmp = stat_grp(dtmp, agc_item)
-      pass
-
-  # genrate dst data
-
-  #
+      dnr, hdr, dstr = stat_grp(dtmp, agc_item)
+      #wirte to file
+      if dnr > 0:
+        hdr = sghdr + hdr
+        args.write(hdr, dstr)
+        print hdr
+        print dstr
+ 
 
 
 if __name__ == "__main__":
   print "stat...."
+  #print  time.mktime(os.stat("./config.txt").st_mtime)
+  print  (os.stat("./config.txt").st_mtime)
   args =  stat_arg()
   t=threading.Timer(2, stat_tm_action, [args])
   t.start()

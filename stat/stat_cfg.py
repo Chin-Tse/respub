@@ -137,7 +137,7 @@ class auto_cfg(object):
       for v, t in zip(value, threshold):
         if v in icfg.keys():
           self.acfg_stat_name[aidx].append(v)
-          self.acfg_stat_cols[aidx].append(icfg[v])
+          self.acfg_stat_cols[aidx].append(int(icfg[v]))
           self.acfg_threshold[aidx].append(int(t))
         else:
           raise ValueError("Config do not have a right format!", str(self.acfg[acfg_item]))
@@ -209,7 +209,7 @@ class auto_cfg(object):
   def get_acfg_stat_space(self, aidx):
     if aidx >= self.alen:
       return []
-    return self.acfg_stat_name[aidx]
+    return self.acfg_stat_space[aidx]
 
 
   def get_acfg_item(self, aidx, acfg_item):

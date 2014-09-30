@@ -9,7 +9,7 @@
 import pandas as pd
 import numpy as np
 import configobj
-import os
+import os, stat
 import time
 import threading
 import copy
@@ -33,6 +33,14 @@ else:
     INT_TYPES = (int, long)
     STR_TYPES = (str, unicode)
 
+def get_input_linenr(args):
+  wcline_cmd = "wc -l " + args.input_log
+  wcline = os.popen(wcline_cmd).readlines()
+  #print wcline, wcline[0].find(" "), wcline[0][0:wcline[0].find(" ")]
+  linenr = int(wcline[0][0:wcline[0].find(" ")])
+  print wcline, linenr
+  return linenr
+
 # stat parameters
 # maybe should be moved to stat_cfg module
 class stat_arg(object):
@@ -46,26 +54,36 @@ class stat_arg(object):
     self.cfg_agp = self.config['auto-grp'] 
     self.cfg_sgp = self.config['spc-grp']
     self.input_log = self.config['path']['input']
+    self.in_log_ctime = (os.stat(self.cfgfile).st_ctime)
     self.output_log = self.config['path']['output']
     opath = os.path.dirname(self.output_log)
     if os.path.exists(opath) == False:
       os.makedirs(opath)
     self.output_fd = open(self.output_log, 'w')
+    # count current line of input log
+    if os.path.exists(self.input_log) == False:
+      raise ValueError("Error cfg, input log is not exist!", self.input_log)
+
+    wcline_cmd = "wc -l " + self.input_log
+    wcline = os.popen(wcline_cmd).readlines()
+    #print wcline, wcline[0].find(" "), wcline[0][0:wcline[0].find(" ")]
+    self.pline = int(wcline[0][0:wcline[0].find(" ")])
+    print "init pline:", self.pline
+
     self.scfg = spc_gcfg(self.cfg_sgp, self.cfg_fmt, self.out_fmt)
     self.acfg = auto_cfg(self.cfg_agp, self.cfg_fmt, self.out_fmt)
     self.max_col = 0
     self.max_col = max(int(col) for col in self.cfg_fmt.values()) 
-    self.max_col += 1
-    self.cfg_fmt['src_net'] = self.max_col
-    self.max_col += 1
-    self.cfg_fmt['dst_net'] = self.max_col
+    self.cfg_fmt['src_net'] = self.max_col + 1
+    self.cfg_fmt['dst_net'] = self.max_col + 2
 
   def chkcfg(self):
     #check cfgfile change date
-    if self.cfgtime == (os.stat(self.cfgfile).st_mtime):
+    cfg_mtime = os.stat(self.cfgfile).st_mtime
+    if self.cfgtime == cfg_mtime:
       return
     
-    self.cfgtime = (os.stat(self.cfgfile).st_mtime)
+    self.cfgtime = cfg_mtime
     # reload config file
     self.config.reload()
     self.cfg_fmt = self.config['log-format']
@@ -89,13 +107,21 @@ class stat_arg(object):
     self.scfg = spc_gcfg(self.cfg_sgp, self.cfg_fmt, self.out_fmt)
     self.max_col = 0
     self.max_col = max(int(col) for col in self.cfg_fmt.values()) 
-    self.max_col += 1
-    self.cfg_fmt['src_net'] = self.max_col
-    self.max_col += 1
-    self.cfg_fmt['dst_net'] = self.max_col
+    self.cfg_fmt['src_net'] = self.max_col + 1
+    self.cfg_fmt['dst_net'] = self.max_col + 2
 
   # check outlog size and inputlog size
   def chksize(self):
+    in_log_st = os.stat(self.input_log)
+    if self.in_log_ctime != in_log_st.st_ctime:
+      self.in_log_ctime = in_log_st.st_ctime
+      print "logfile change:", self.in_log_ctime
+      self.pline = 0
+
+    """
+    if in_log_st[stat.ST_SIZE] > 2000000:
+      pass
+    """
     pass
 
   def write(self, hdr, dstr):
@@ -129,7 +155,7 @@ def stat_prepare(data, args, spc_idx):
         mt = str(IP(mt))
         dm = dmlist[idx]
       except:
-        raise ValueError("Error srcip config:", mt)
+        raise ValueError("Error srcip config:", mt, dm, dmlist, idx)
       
     elif dm == int(cfg_fmt['dstip']):
       dmlist[idx] = int(cfg_fmt['dst_net'])
@@ -139,7 +165,7 @@ def stat_prepare(data, args, spc_idx):
         mt = str(IP(mt))
         dm = dmlist[idx]
       except:
-        raise ValueError("Error srcip config:", mt)
+        raise ValueError("Error dstip config:", mt, dm, dmlist, idx)
 
     # origanize cmp string
     # target cmp string should be like 
@@ -165,7 +191,9 @@ def stat_recur_stat(df, dmlist, acfg_item):
   gp = df.groupby(dmlist[0])
   for gkey, sdf in gp:
     val_list = list(gp.sum().loc[gkey, acfg_item.stat_cols])
-    dbgstr = str(gkey) + ":" + str(acfg_item.stat_name) + str(val_list)
+    dbgstr = str(gkey) + ":" + str(acfg_item.stat_name) + \
+            str(val_list) + str(acfg_item.threshold) + str(acfg_item.stat_cols) 
+    print dbgstr
 
     # check current dm val-threshold
     for val_idx, val in enumerate(val_list):
@@ -187,7 +215,8 @@ def stat_recur_stat(df, dmlist, acfg_item):
       # value output
       for vidx, val in enumerate(val_list):
         if vidx == 0:
-          dstr += "%*d"%(acfg_item.dm2stat_space[dmidx] + acfg_item.stat_space[vidx], val)
+          dstr += "%*d"%(acfg_item.dm2stat_space[dmidx] \
+              + acfg_item.stat_space[vidx], val)
         else:
           dstr += "%*d"%(acfg_item.stat_space[vidx], val)
       dstr += "\n"
@@ -243,17 +272,34 @@ def stat_grp(df, acfg_item):
 def stat_tm_action(args=[]):
   print 'timeout:'
   #arg = args[0]
-  global t        #Notice: use global variable!
-  t=threading.Timer(5, stat_tm_action, [args])
-  t.start()
+
+  # chk
+  args.chkcfg()
+  #args.chksize()
 
   # read data
-  print args.input_log
+  print args.input_log, args.pline
   try:
+    linenr = get_input_linenr(args)
+    if linenr > args.pline:
+      rows = linenr - args.pline
+      print "Rows:", rows
+    else:
+      args.pline = 0
+      rows = linenr
+      print "eRows:", rows
+      raise ValueError("Input log file change not dectect!")
+
+    if rows == 0:
+      return
     data = pd.read_csv(args.input_log, header=None, \
-        nrows=120, parse_dates=[0], skiprows=args.pline)
+        parse_dates=[0], skiprows=args.pline, nrows = rows)
 
     data_len = len(data)
+    # Last line check
+    if np.isfinite(data.ix[len(data) - 1][args.max_col]) == False:
+      data = data.dropna(subset=[args.max_col])
+      data_len -= 1
     args.pline += data_len
   except:
     print "Input Logfile End......"
@@ -274,7 +320,6 @@ def stat_tm_action(args=[]):
     dnr, hdr, dstr = stat_grp(data, agc_item)
     #wirte to file
     if dnr > 0:
-      hdr = sghdr + hdr
       args.write(hdr, dstr)
       print hdr
       print dstr
@@ -288,7 +333,7 @@ def stat_tm_action(args=[]):
         print "Error: Get spcagc item fail!"
         continue
       
-      print "start restructure data:", sidx, aidx, \
+      print "start spcfg data:", sidx, aidx, \
           agc_item.dmname, agc_item.stat_name
       dnr, hdr, dstr = stat_grp(dtmp, agc_item)
       #wirte to file
@@ -298,7 +343,9 @@ def stat_tm_action(args=[]):
         print hdr
         print dstr
  
-
+  global t        #Notice: use global variable!
+  t=threading.Timer(60, stat_tm_action, [args])
+  t.start()
 
 if __name__ == "__main__":
   print "stat...."

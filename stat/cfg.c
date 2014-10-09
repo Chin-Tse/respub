@@ -26,8 +26,10 @@ int main(int argc, char *argv[])
   PyObject* pModule;
   PyObject* pDict;
   PyObject* pFunc;
+  PyObject* parm;
+  PyObject* result;
 
-  pName = PyString_FromString("call");
+  pName = PyString_FromString("stat_cfg");
   pModule = PyImport_Import(pName);
   if(!pModule)
   {
@@ -43,17 +45,25 @@ int main(int argc, char *argv[])
   }
 
   {
-    pFunc = PyDict_GetItemString(pDict,"test");
+    pFunc = PyDict_GetItemString(pDict,"getcfg");
     if(!pFunc || !PyCallable_Check(pFunc))
     {
       printf("can't find function [test]");
       getchar();
       return -1;
     }
+    parm = Py_BuildValue("(s)", "./config.txt");
+    result = PyObject_CallObject(pFunc, parm);
 
-    PyObject_CallObject(pFunc,0);
+    if (result == NULL) {
+      printf("call getcfg fail!");
+    }
+
+    printf("call getcfg sucuss!");
+    Py_DECREF(result);
   }
 
+  /*
   {
     pFunc = PyDict_GetItemString(pDict,"add");
     if(!pFunc || !PyCallable_Check(pFunc))
@@ -70,13 +80,13 @@ int main(int argc, char *argv[])
     int ret = PyInt_AsLong(pAdded);  
     printf("add value:%d\n",ret);
     Py_DECREF(args);
-  }    
+  } */   
 
   Py_DECREF(pName);
   Py_DECREF(pDict);
   Py_DECREF(pModule);
   Py_Finalize();    
-  system("PAUSE");    
+
   return 0;
 }
 

@@ -1,19 +1,46 @@
 
-CC=gcc 
-INCDIR=./inc
-CFLAGS = -g -I$(INCDIR) 
-SRC=./src
-TARGET_PATH=./lib
+CC			?= gcc 
 
-SOURCE  := $(wildcard $(SRC)/*.c)
-OBJS    := $(patsubst %.c,%.o,$(SOURCE))
-TARGET=ipv4_log
+#CFLAGS 	= -O3 -std=c99 -Wall -Wextra -Ideps
+#CFLAGS  += -fPIC -Wall -ansi -std=c99 -pedantic
 
-.PHONY : all
+LDFLAGS	= -lpthread
 
-all :$(OBJS) 
-	$(CC) $(CFLAGS) -g -o $(TARGET) $(OBJS) 
+TOPDIR 	:= $(shell if [ "$$PWD" != "" ]; then echo $$PWD; else pwd; fi)
 
-.PHONY : clean
-clean:
+SRCDIR  = src
+INCDIR	=./include
+CFLAGS  += -g -I$(INCDIR) 
+
+LIBSRC 	= list iniparser
+LIBPRE	:= $(TOPDIR)
+LIBDIR 	:= $(LIBPRE)/lib
+CMLIBS 		= $(patsubst %, $(LIBDIR)/lib%.a, $(LIBSRC))
+CLN_LIBS= $(addprefix _clean_, $(LIBSRC))
+
+LDFLAGS += -L$(LIBDIR)
+SOURCE  := $(wildcard $(TOPDIR)/$(SRCDIR)/*.c)
+OBJDIR 	:= obj
+OBJS    := $(patsubst $(TOPDIR)/%.c,$(TOPDIR)/$(OBJDIR)/%.o,$(SOURCE))
+TARGET	=	ipv4_log
+
+$(TARGET): $(CMLIBS) $(OBJS) 
+	@echo $(TOPDIR) $(LIBS)
+	@mkdir -p $(patsubst %, $(TOPDIR)/$(OBJDIR)/%, $(SRCDIR))
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+
+$(TOPDIR)/$(OBJDIR)/%.o:$(TOPDIR)/%c
+	$(CC) -c $(CFLAGS) -o $@ $< 
+
+$(CMLIBS):
+	$(MAKE) -C $(patsubst $(LIBDIR)/lib%.a, %, $@) PREFIX=$(LIBPRE) install
+
+$(CLN_LIBS):
+	$(MAKE) -C $(patsubst _clean_%, %, $@) PREFIX=$(LIBPRE) uninstall
+	$(MAKE) -C $(patsubst _clean_%, %, $@) PREFIX=$(LIBPRE) clean
+
+clean: $(CLN_LIBS)
 	rm -f $(TARGET) $(OBJS)
+
+.PHONY : all clean $(LIBS) $(CLN_LIBS)
+

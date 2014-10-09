@@ -27,9 +27,10 @@ TARGET	=	ipv4_log
 $(TARGET): $(CMLIBS) $(OBJS) 
 	@echo $(TOPDIR) $(LIBS)
 	@mkdir -p $(patsubst %, $(TOPDIR)/$(OBJDIR)/%, $(SRCDIR))
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-$(TOPDIR)/$(OBJDIR)/%.o:$(TOPDIR)/%c
+$(TOPDIR)/$(OBJDIR)/%.o: $(TOPDIR)/%.c
+	@mkdir -p $(dir $@)
 	$(CC) -c $(CFLAGS) -o $@ $< 
 
 $(CMLIBS):

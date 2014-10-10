@@ -57,6 +57,7 @@ libiniparser.so:	$(OBJS)
 
 clean:
 	$(RM) $(OBJS)
+	$(RM) libiniparser.a libiniparser.so.0
 
 veryclean:
 	$(RM) $(OBJS) libiniparser.a libiniparser.so*

@@ -68,7 +68,7 @@ int parse_ini_file(char * ini_name)
     iniparser_dump(ini, stderr);
 
     /* Get pizza attributes */
-    printf("Pizza:\n");
+    printf("Pizza-------------:\n");
 
     b = iniparser_getboolean(ini, "pizza:ham", -1);
     printf("Ham:       [%d]\n", b);

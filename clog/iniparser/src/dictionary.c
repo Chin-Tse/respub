@@ -73,6 +73,36 @@ char * xstrdup(const char * s)
     return t ;
 }
 
+char *val_dup(const char *s)
+{
+    mdict_t* t ;
+    size_t len ;
+    if (!s)
+        return NULL ;
+
+    len = strlen(s);
+    t = calloc(1, sizeof(mdict_t) + len) ;
+    if (t) {
+        memcpy(t->data, s, len) ;
+    }
+
+    return t->data;
+}
+
+void val_free(const char *v)
+{
+    mdict_t *t;
+    
+    t = container_of(v, mdict_t, data);
+    
+    if (t->dict != NULL) {
+      dictionary_del(t->dict);
+    }
+    free(t);
+
+    return;
+}
+
 /*---------------------------------------------------------------------------
                             Function codes
  ---------------------------------------------------------------------------*/
@@ -152,8 +182,9 @@ void dictionary_del(dictionary * d)
     for (i=0 ; i<d->size ; i++) {
         if (d->key[i]!=NULL)
             free(d->key[i]);
-        if (d->val[i]!=NULL)
-            free(d->val[i]);
+        if (d->val[i]!=NULL) {
+            val_free(d->val[i]);
+        }
     }
     free(d->val);
     free(d->key);
@@ -240,8 +271,8 @@ int dictionary_set(dictionary * d, const char * key, const char * val)
                 if (!strcmp(key, d->key[i])) {   /* Same key */
                     /* Found a value: modify and return */
                     if (d->val[i]!=NULL)
-                        free(d->val[i]);
-                    d->val[i] = val ? xstrdup(val) : NULL ;
+                        val_free(d->val[i]);
+                    d->val[i] = val ? val_dup(val) : NULL ;
                     /* Value has been modified: return */
                     return 0 ;
                 }
@@ -272,7 +303,7 @@ int dictionary_set(dictionary * d, const char * key, const char * val)
     }
     /* Copy key */
     d->key[i]  = xstrdup(key);
-    d->val[i]  = val ? xstrdup(val) : NULL ;
+    d->val[i]  = val ? val_dup(val) : NULL ;
     d->hash[i] = hash;
     d->n ++ ;
     return 0 ;
@@ -318,7 +349,7 @@ void dictionary_unset(dictionary * d, const char * key)
     free(d->key[i]);
     d->key[i] = NULL ;
     if (d->val[i]!=NULL) {
-        free(d->val[i]);
+        val_free(d->val[i]);
         d->val[i] = NULL ;
     }
     d->hash[i] = 0 ;
@@ -352,11 +383,18 @@ void dictionary_dump(dictionary * d, FILE * out)
             fprintf(out, "%20s\t[%s]\n",
                     d->key[i],
                     d->val[i] ? d->val[i] : "UNDEF");
+            mdict_t *t;
+            t = container_of(d->val[i], mdict_t, data);
+            if (t->dict != NULL) {
+              fprintf(out, "-----subdict start-----\n");
+              dictionary_dump(t->dict, out);
+              fprintf(out, "-----subdict   end-----\n");
+            }
+
         }
     }
     return ;
 }
-
 
 /* Test code */
 #ifdef TESTDIC

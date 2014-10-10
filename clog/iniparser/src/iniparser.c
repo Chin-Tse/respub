@@ -165,6 +165,8 @@ char * iniparser_getsecname(dictionary * d, int n)
 /*--------------------------------------------------------------------------*/
 void iniparser_dump(dictionary * d, FILE * f)
 {
+    dictionary_dump(d, f);
+    /*
     int     i ;
 
     if (d==NULL || f==NULL) return ;
@@ -172,11 +174,19 @@ void iniparser_dump(dictionary * d, FILE * f)
         if (d->key[i]==NULL)
             continue ;
         if (d->val[i]!=NULL) {
+            mdict_t *mdict;
+
             fprintf(f, "[%s]=[%s]\n", d->key[i], d->val[i]);
+            mdict = container_of(d->val[i], mdict_t, data);
+            if (!mdict->dict) {
+                iniparser_dump(mdict->dict, f);
+            }
         } else {
             fprintf(f, "[%s]=UNDEF\n", d->key[i]);
         }
     }
+    */
+
     return ;
 }
 
@@ -503,6 +513,19 @@ int iniparser_find_entry(
     return found ;
 }
 
+
+mdict_t* iniparser_getmdict(dictionary * d, const char * key)
+{
+    char    *   str ;
+
+    str = iniparser_getstring(d, key, INI_INVALID_KEY);
+    if (str==INI_INVALID_KEY) {
+        return NULL;
+    }
+
+    return container_of(str, mdict_t, data);
+}
+
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Set an entry in a dictionary.
@@ -567,6 +590,7 @@ static line_status iniparser_line(
     char * key = NULL;
     char * value = NULL;
     char * equals = NULL;
+    int   sect_lv = 0;
 
     if (!line) {
         fprintf(stderr, "iniparser: memory alloc error\n");
@@ -588,6 +612,7 @@ static line_status iniparser_line(
        *value = 0;
     } else {
         key = malloc(line_size + 1);
+        value = malloc(sizeof(int));
     }
 
     if (!key || (equals && !value)) {
@@ -607,13 +632,21 @@ static line_status iniparser_line(
         sta = LINE_COMMENT ;
     } else if (line[0]=='[' && line[len-1]==']') {
         /* Section name */
+        sect_lv = 0;
+        while (line[sect_lv] == '[' ) {
+          sect_lv++;
+        }
         sscanf(line, "[%[^]]", key);
         strstrip(key);
         strlwc(key);
         sta = LINE_SECTION ;
-        *section_out=key;
-        /* don't free key's memory */
+
+        memcpy(value, &sect_lv, sizeof(sect_lv));
+        *value_out = value;
+        *section_out = key;
         key = NULL;
+        value = NULL;
+        /* don't free key's memory */
     } else if (equals && (sscanf (line, "%[^=] = \"%[^\"]\"", key, value) == 2
            ||  sscanf (line, "%[^=] = '%[^\']'",   key, value) == 2
            ||  sscanf (line, "%[^=] = %[^;#]",     key, value) == 2)) {
@@ -697,13 +730,18 @@ dictionary * iniparser_load(const char * ininame)
     char *val = NULL;
     char* full_line = NULL;
     char* prev_line = NULL;
+    char  strbuf[64];
 
     int  len ;
     int  lineno=0 ;
     int  errs=0;
     int  seckey_size=0;
+    int  sect_lv;
 
-    dictionary * dict = NULL ;
+    dictionary    *dict = NULL ;
+    mdict_t       *mdict = NULL ;
+    mdict_t       *mmdict = NULL ;
+    mdict_t       *xmdict = NULL ;
 
     if ((in=fopen(ininame, "r"))==NULL) {
         fprintf(stderr, "iniparser: cannot open %s\n", ininame);
@@ -714,6 +752,17 @@ dictionary * iniparser_load(const char * ininame)
     if (!dict) {
         goto out;
     }
+
+    /* xxx realy need ? */ 
+    dict = realloc(dict, sizeof(dictionary) + sizeof(mdict_t));
+    if (!dict) {
+        goto out;
+    }
+    mdict = (mdict_t *)( (char *)dict + sizeof(dictionary) );
+    mdict->dict = dict;
+    mdict->level = 0;
+    mdict->parent = NULL;
+    mmdict = mdict;
 
     memset(line,    0, ASCIILINESZ);
 
@@ -804,20 +853,48 @@ dictionary * iniparser_load(const char * ininame)
         }
 
         switch (iniparser_line(total_size, full_line, &current_section, &key, &val)) {
-            case LINE_EMPTY:
-            case LINE_COMMENT:
+        case LINE_EMPTY:
+        case LINE_COMMENT:
             break ;
 
-            case LINE_SECTION:
+        case LINE_SECTION:
             if (section) {
                 free(section);
                 section=NULL;
             }
-            errs = dictionary_set(dict, current_section, NULL);
+
+            sect_lv = *((int*)(val));
+            if (sect_lv > mmdict->level + 1) {
+              errs++;
+              fprintf(stderr,
+                      "iniparser: wrong config level, from %d to %d:%s\n",
+                      mmdict->level, sect_lv, current_section);
+              goto out;
+            } 
+            
+            while (sect_lv <= mmdict->level) {
+                mmdict = mmdict->parent;
+            }
+
+            snprintf(strbuf, 64, "%s%d-dict", current_section, sect_lv);
+            errs = dictionary_set(mmdict->dict, current_section, strbuf);
             section = current_section;
+
+            xmdict = iniparser_getmdict(mmdict->dict, current_section);
+            if (!xmdict) {
+              fprintf(stderr, "iniparser: fail to get subdict instance!\n");
+              goto out;
+            }
+            xmdict->parent = mmdict;
+            xmdict->dict = dictionary_new(0);
+            xmdict->level = mmdict->level + 1;
+            mmdict = xmdict;
+
+            free(val);
+            val = NULL;
             break ;
 
-            case LINE_VALUE:
+        case LINE_VALUE:
             {
                 char *seckey;
                 /* section + ':' + key + eos */
@@ -829,14 +906,18 @@ dictionary * iniparser_load(const char * ininame)
                            "iniparser: out of mem\n");
                     goto out;
                 }
-                snprintf(seckey, seckey_size, "%s:%s", section, key);
-                errs = dictionary_set(dict, seckey, val) ;
+                snprintf(seckey, seckey_size, "%s", key);
+                errs = dictionary_set(mmdict->dict, seckey, val) ;
                 free(seckey);
+                free(key);
+                free(val);
+                key = NULL;
+                val = NULL;
                 seckey = NULL;
             }
             break ;
 
-            case LINE_ERROR:
+        case LINE_ERROR:
             fprintf(stderr, "iniparser: syntax error in %s (%d):\n",
                     ininame,
                     lineno);
@@ -859,6 +940,7 @@ dictionary * iniparser_load(const char * ininame)
     }
 out:
     if (errs) {
+        dictionary_dump(dict, stderr);
         dictionary_del(dict);
         dict = NULL ;
     }

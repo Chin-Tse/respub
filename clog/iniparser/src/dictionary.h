@@ -20,6 +20,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -27,11 +28,13 @@
 extern "C" {
 #endif
 
+#ifndef container_of
+#define container_of(ptr, type, member) ( (type *)( (char *)ptr - offsetof(type,member) ))
+#endif
+
 /*---------------------------------------------------------------------------
                                 New types
  ---------------------------------------------------------------------------*/
-
-
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Dictionary object
@@ -50,6 +53,15 @@ typedef struct _dictionary_ {
     unsigned     *  hash ;  /** List of hash values for keys */
 } dictionary ;
 
+/**
+ @brief   Multi-level Dictionary
+ */
+typedef struct _mdict_ {
+    int             level;  /** Current Dict's level in vertical */
+    dictionary    * dict;   /** Current level Dict */
+    struct _mdict_* parent;
+    char            data[1];
+} mdict_t;
 
 /*---------------------------------------------------------------------------
                             Function prototypes

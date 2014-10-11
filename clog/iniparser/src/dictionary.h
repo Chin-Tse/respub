@@ -51,6 +51,7 @@ typedef struct _dictionary_ {
     char        **  val ;   /** List of string values */
     char        **  key ;   /** List of string keys */
     unsigned     *  hash ;  /** List of hash values for keys */
+    void         *  mdict;
 } dictionary ;
 
 /**

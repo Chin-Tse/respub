@@ -13,6 +13,7 @@
 /*---------------------------- Defines -------------------------------------*/
 #define ASCIILINESZ         (1024)
 #define INI_INVALID_KEY     ((char*)-1)
+#define STEP_STR            ("    ")
 
 /*---------------------------------------------------------------------------
                         Private to this module
@@ -81,6 +82,20 @@ static void strstrip(char * s)
 
 /*-------------------------------------------------------------------------*/
 /**
+  @brief    Get number of entyrs in a dictionary
+  @param    d   Dictionary to examine
+  @return   int Number of entrys found in dictionary
+ */
+/*--------------------------------------------------------------------------*/
+int iniparser_entry_num(dictionary * d)
+{
+    if (d==NULL) return 0;
+
+    return d->n;
+}
+
+/*-------------------------------------------------------------------------*/
+/**
   @brief    Get number of sections in a dictionary
   @param    d   Dictionary to examine
   @return   int Number of sections found in dictionary
@@ -99,15 +114,19 @@ static void strstrip(char * s)
 /*--------------------------------------------------------------------------*/
 int iniparser_getnsec(dictionary * d)
 {
-    int i ;
-    int nsec ;
+    int     i ;
+    int     nsec ;
+    mdict_t *m;
 
     if (d==NULL) return -1 ;
     nsec=0 ;
     for (i=0 ; i<d->size ; i++) {
         if (d->key[i]==NULL)
             continue ;
-        if (strchr(d->key[i], ':')==NULL) {
+        if (d->val[i]==NULL)
+            continue ;
+        m = container_of(d->val[i], mdict_t, data);
+        if (!m->dict) {
             nsec ++ ;
         }
     }
@@ -130,141 +149,28 @@ int iniparser_getnsec(dictionary * d)
 /*--------------------------------------------------------------------------*/
 char * iniparser_getsecname(dictionary * d, int n)
 {
-    int i ;
-    int foundsec ;
+    int     i ;
+    int     foundsec ;
+    mdict_t *m;
 
     if (d==NULL || n<0) return NULL ;
     foundsec=0 ;
     for (i=0 ; i<d->size ; i++) {
         if (d->key[i]==NULL)
             continue ;
-        if (strchr(d->key[i], ':')==NULL) {
+        m = container_of(d->val[i], mdict_t, data);
+        /* every section contain next level dict */
+        if (!m->dict) {
             foundsec++ ;
-            if (foundsec>n)
+            if (foundsec > n)
                 break ;
         }
     }
     if (foundsec<=n) {
         return NULL ;
     }
+
     return d->key[i] ;
-}
-
-/*-------------------------------------------------------------------------*/
-/**
-  @brief    Dump a dictionary to an opened file pointer.
-  @param    d   Dictionary to dump.
-  @param    f   Opened file pointer to dump to.
-  @return   void
-
-  This function prints out the contents of a dictionary, one element by
-  line, onto the provided file pointer. It is OK to specify @c stderr
-  or @c stdout as output files. This function is meant for debugging
-  purposes mostly.
- */
-/*--------------------------------------------------------------------------*/
-void iniparser_dump(dictionary * d, FILE * f)
-{
-    dictionary_dump(d, f);
-    /*
-    int     i ;
-
-    if (d==NULL || f==NULL) return ;
-    for (i=0 ; i<d->size ; i++) {
-        if (d->key[i]==NULL)
-            continue ;
-        if (d->val[i]!=NULL) {
-            mdict_t *mdict;
-
-            fprintf(f, "[%s]=[%s]\n", d->key[i], d->val[i]);
-            mdict = container_of(d->val[i], mdict_t, data);
-            if (!mdict->dict) {
-                iniparser_dump(mdict->dict, f);
-            }
-        } else {
-            fprintf(f, "[%s]=UNDEF\n", d->key[i]);
-        }
-    }
-    */
-
-    return ;
-}
-
-/*-------------------------------------------------------------------------*/
-/**
-  @brief    Save a dictionary to a loadable ini file
-  @param    d   Dictionary to dump
-  @param    f   Opened file pointer to dump to
-  @return   void
-
-  This function dumps a given dictionary into a loadable ini file.
-  It is Ok to specify @c stderr or @c stdout as output files.
- */
-/*--------------------------------------------------------------------------*/
-void iniparser_dump_ini(dictionary * d, FILE * f)
-{
-    int     i ;
-    int     nsec ;
-    char *  secname ;
-
-    if (d==NULL || f==NULL) return ;
-
-    nsec = iniparser_getnsec(d);
-    if (nsec<1) {
-        /* No section in file: dump all keys as they are */
-        for (i=0 ; i<d->size ; i++) {
-            if (d->key[i]==NULL)
-                continue ;
-            fprintf(f, "%s = %s\n", d->key[i], d->val[i]);
-        }
-        return ;
-    }
-    for (i=0 ; i<nsec ; i++) {
-        secname = iniparser_getsecname(d, i) ;
-        iniparser_dumpsection_ini(d, secname, f) ;
-    }
-    fprintf(f, "\n");
-    return ;
-}
-
-/*-------------------------------------------------------------------------*/
-/**
-  @brief    Save a dictionary section to a loadable ini file
-  @param    d   Dictionary to dump
-  @param    s   Section name of dictionary to dump
-  @param    f   Opened file pointer to dump to
-  @return   void
-
-  This function dumps a given section of a given dictionary into a loadable ini
-  file.  It is Ok to specify @c stderr or @c stdout as output files.
- */
-/*--------------------------------------------------------------------------*/
-void iniparser_dumpsection_ini(dictionary * d, char * s, FILE * f)
-{
-    int     j ;
-    char    *keym;
-    int     secsize ;
-
-    if (d==NULL || f==NULL) return ;
-    if (! iniparser_find_entry(d, s)) return ;
-
-    fprintf(f, "\n[%s]\n", s);
-    secsize = (int)strlen(s) + 2;
-    keym = malloc(secsize);
-    snprintf(keym, secsize, "%s:", s);
-    for (j=0 ; j<d->size ; j++) {
-        if (d->key[j]==NULL)
-            continue ;
-        if (!strncmp(d->key[j], keym, secsize-1)) {
-            fprintf(f,
-                    "%-30s = %s\n",
-                    d->key[j]+secsize-1,
-                    d->val[j] ? d->val[j] : "");
-        }
-    }
-    fprintf(f, "\n");
-    free(keym);
-    return ;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -277,28 +183,26 @@ void iniparser_dumpsection_ini(dictionary * d, char * s, FILE * f)
 /*--------------------------------------------------------------------------*/
 int iniparser_getsecnkeys(dictionary * d, char * s)
 {
-    int     secsize, nkeys ;
-    char    *keym;
-    int j ;
+    char    *val;
+    mdict_t *m;
+    int     nkeys ;
 
     nkeys = 0;
-
     if (d==NULL) return nkeys;
-    if (! iniparser_find_entry(d, s)) return nkeys;
 
-    secsize  = (int)strlen(s)+2;
-    keym = malloc(secsize);
-    snprintf(keym, secsize, "%s:", s);
-
-    for (j=0 ; j<d->size ; j++) {
-        if (d->key[j]==NULL)
-            continue ;
-        if (!strncmp(d->key[j], keym, secsize-1))
-            nkeys++;
+    val = iniparser_getstring(d, s, INI_INVALID_KEY);
+    if (val == INI_INVALID_KEY) {
+        return nkeys;
     }
-    free(keym);
-    return nkeys;
+    m = container_of(val, mdict_t, data);
+    /* section is not exist */
+    if (!m->dict) {
+        return nkeys;
+    }
 
+    nkeys = m->dict->n;
+
+    return nkeys;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -317,39 +221,39 @@ int iniparser_getsecnkeys(dictionary * d, char * s)
 /*--------------------------------------------------------------------------*/
 char ** iniparser_getseckeys(dictionary * d, char * s)
 {
-
-    char **keys;
-
-    int i, j ;
-    char    *keym;
-    int     secsize, nkeys ;
+    char    **keys;
+    int     i, j ;
+    int     nkeys ;
+    char    *val;
+    mdict_t *m;
 
     keys = NULL;
 
     if (d==NULL) return keys;
-    if (! iniparser_find_entry(d, s)) return keys;
+
+    val = iniparser_getstring(d, s, INI_INVALID_KEY);
+    if (val == INI_INVALID_KEY) {
+        return keys;
+    }
+    /* section is not exist */
+    m = container_of(val, mdict_t, data);
+    if (!m->dict) {
+        return keys;
+    }
 
     nkeys = iniparser_getsecnkeys(d, s);
 
     keys = (char**) malloc(nkeys*sizeof(char*));
 
-    secsize  = (int)strlen(s) + 2;
-    keym = malloc(secsize);
-    snprintf(keym, secsize, "%s:", s);
-
     i = 0;
-
-    for (j=0 ; j<d->size ; j++) {
-        if (d->key[j]==NULL)
+    for (j = 0 ; j < m->dict->size ; j++) {
+        if (m->dict->key[j]==NULL)
             continue ;
-        if (!strncmp(d->key[j], keym, secsize-1)) {
-            keys[i] = d->key[j];
-            i++;
-        }
+        keys[i] = d->key[j];
+        i++;
     }
-    free(keym);
-    return keys;
 
+    return keys;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -519,6 +423,7 @@ mdict_t* iniparser_getmdict(dictionary * d, const char * key)
     char    *   str ;
 
     str = iniparser_getstring(d, key, INI_INVALID_KEY);
+
     if (str==INI_INVALID_KEY) {
         return NULL;
     }
@@ -632,11 +537,17 @@ static line_status iniparser_line(
         sta = LINE_COMMENT ;
     } else if (line[0]=='[' && line[len-1]==']') {
         /* Section name */
+        int i = 0;
         sect_lv = 0;
-        while (line[sect_lv] == '[' ) {
+        while (line[i] == '[' || line[i] == ' ' ) {
+          if (line[i] == ' ') {
+            i++;
+            continue;
+          }
+          i++;
           sect_lv++;
         }
-        sscanf(line, "[%[^]]", key);
+        sscanf(line + i, "%[^]]", key);
         strstrip(key);
         strlwc(key);
         sta = LINE_SECTION ;
@@ -762,6 +673,7 @@ dictionary * iniparser_load(const char * ininame)
     mdict->dict = dict;
     mdict->level = 0;
     mdict->parent = NULL;
+    dict->mdict = mdict;
     mmdict = mdict;
 
     memset(line,    0, ASCIILINESZ);
@@ -887,6 +799,7 @@ dictionary * iniparser_load(const char * ininame)
             }
             xmdict->parent = mmdict;
             xmdict->dict = dictionary_new(0);
+            xmdict->dict->mdict = xmdict;
             xmdict->level = mmdict->level + 1;
             mmdict = xmdict;
 
@@ -984,6 +897,173 @@ out:
 void iniparser_freedict(dictionary * d)
 {
     dictionary_del(d);
+}
+
+/*-------------------------------------------------------------------------*/
+/**
+  @brief    Dump a dictionary to an opened file pointer.
+  @param    d   Dictionary to dump.
+  @param    f   Opened file pointer to dump to.
+  @return   void
+
+  This function prints out the contents of a dictionary, one element by
+  line, onto the provided file pointer. It is OK to specify @c stderr
+  or @c stdout as output files. This function is meant for debugging
+  purposes mostly.
+ */
+/*--------------------------------------------------------------------------*/
+void iniparser_dump(dictionary * d, FILE * f)
+{
+    /* just for debug purpose, so call dictionary is ok */
+    dictionary_dump(d, f);
+
+    return ;
+}
+
+/*-------------------------------------------------------------------------*/
+/**
+  @brief    Save a dictionary to a loadable ini file
+  @param    d   Dictionary to dump
+  @param    f   Opened file pointer to dump to
+  @return   void
+
+  This function dumps a given dictionary into a loadable ini file.
+  It is Ok to specify @c stderr or @c stdout as output files.
+  This function's output should in a fommat that is loadable, so depend
+  on dictionary is not suitable
+ */
+/*--------------------------------------------------------------------------*/
+void iniparser_dump_ini(dictionary * d, FILE * f)
+{
+    int     i, j ;
+    int     nsec ;
+    char *  secname ;
+    mdict_t *m;
+    char    *start = NULL;
+
+    if (d==NULL || f==NULL) return ;
+    
+    m = d->mdict;
+    if (!m) {
+      fprintf(f, "#Error, can not find mdict!\n");
+      return;
+    }
+    start = malloc(strlen("    ") * m->level + 1);
+    start[0] = '\0';
+    j = 0;
+    while (j++ < m->level) {
+        sprintf(start, "%s    ", start);
+    }
+
+    nsec = iniparser_getnsec(d);
+    if (nsec<1) {
+        /* No section in file: dump all keys as they are */
+        for (i=0 ; i<d->size ; i++) {
+            if (d->key[i]==NULL)
+                continue ;
+            fprintf(f, "%s%20s = %s\n", start, d->key[i], d->val[i]);
+        }
+        goto out;
+    }
+
+    /* dump keys not in any section */
+    for (i=0 ; i<d->size ; i++) {
+        if (d->key[i]) {
+            m = container_of(d->val[i], mdict_t, data);
+            if (m->dict != NULL) {
+                continue;
+            }
+            fprintf(f, "%s%20s = %s\n",
+                    start, d->key[i],
+                    d->val[i]);
+        }
+    }
+
+    /* dump keys in sections  */
+    for (i=0 ; i<nsec ; i++) {
+        secname = iniparser_getsecname(d, i) ;
+        iniparser_dumpsection_ini(d, secname, f) ;
+    }
+    fprintf(f, "\n");
+
+out:
+    if (start) {
+      free(start);
+    }
+
+    return ;
+}
+
+/*-------------------------------------------------------------------------*/
+/**
+  @brief    Save a dictionary section to a loadable ini file
+  @param    d   Dictionary to dump
+  @param    s   Section name of dictionary to dump
+  @param    f   Opened file pointer to dump to
+  @return   void
+
+  This function dumps a given section of a given dictionary into a loadable ini
+  file.  It is Ok to specify @c stderr or @c stdout as output files.
+ */
+/*--------------------------------------------------------------------------*/
+void iniparser_dumpsection_ini(dictionary * d, char * s, FILE * f)
+{
+    size_t  j;
+    mdict_t *m;
+    char    *start;
+    char    *sec_start;
+    char    *sec_end;
+    char    *val;
+
+    if (d==NULL || f==NULL) return ;
+
+    val = iniparser_getstring(d, s, INI_INVALID_KEY);
+    if (val == INI_INVALID_KEY) {
+        return;
+    }
+    m = d->mdict;
+    if (!m) {
+      fprintf(f, "#Error, can not find mdict!\n");
+      return;
+    }
+    
+    start = malloc(strlen("    ") * m->level + 1);
+    sec_start = malloc(m->level + 2 );
+    sec_end = malloc(m->level + 2 );
+    start[0] = '\0';
+    sec_start[0] = '\0';
+    sec_end[0] = '\0';
+    
+    j = 0;
+    while (j++ < m->level) {
+        sprintf(start, "%s    ", start);
+    }
+    j = 0;
+    while (j++ < m->level + 1) {
+        sprintf(sec_start, "%s[", sec_start);
+        sprintf(sec_end, "%s]", sec_end);
+    }
+
+    m = container_of(val, mdict_t, data);
+    if (!m->dict) {
+        fprintf(f, "\n%s%20s = %s\n", start, s, val);
+        goto out;
+    }
+    
+    fprintf(f, "\n%s%s%s%s\n", start, sec_start, s, sec_end);
+    iniparser_dump_ini(m->dict, f);
+out:
+    if (start) {
+        free(start);
+    }
+    if (sec_start) {
+        free(sec_start);
+    }
+    if (sec_end) {
+        free(sec_end);
+    }
+    
+    return ;
 }
 
 /* vim: set ts=4 et sw=4 tw=75 */

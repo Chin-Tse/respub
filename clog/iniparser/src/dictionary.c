@@ -371,28 +371,61 @@ void dictionary_unset(dictionary * d, const char * key)
 /*--------------------------------------------------------------------------*/
 void dictionary_dump(dictionary * d, FILE * out)
 {
-    size_t  i ;
+    size_t  i, j;
+    mdict_t *m;
+    char    *start;
+    char    *sec_start;
+    char    *sec_end;
 
     if (d==NULL || out==NULL) return ;
-    if (d->n<1) {
-        fprintf(out, "empty dictionary\n");
-        return ;
+    
+    m = d->mdict;
+    if (!m) {
+      fprintf(out, "#Error, can not find mdict!\n");
+      return;
     }
+
+    start = malloc(strlen("    ") * m->level + 1);
+    sec_start = malloc(m->level + 2 );
+    sec_end = malloc(m->level + 2 );
+    start[0] = '\0';
+    sec_start[0] = '\0';
+    sec_end[0] = '\0';
+
+    j = 0;
+    while (j++ < m->level) {
+        sprintf(start, "%s    ", start);
+    }
+    j = 0;
+    while (j++ < m->level + 1) {
+        sprintf(sec_start, "%s[", sec_start);
+        sprintf(sec_end, "%s]", sec_end);
+    }
+
+    if (d->n<1) {
+        fprintf(out, "%s#empty dictionary\n", start);
+        goto out;
+    }
+
     for (i=0 ; i<d->size ; i++) {
         if (d->key[i]) {
-            fprintf(out, "%20s\t[%s]\n",
-                    d->key[i],
-                    d->val[i] ? d->val[i] : "UNDEF");
-            mdict_t *t;
-            t = container_of(d->val[i], mdict_t, data);
-            if (t->dict != NULL) {
-              fprintf(out, "-----subdict start-----\n");
-              dictionary_dump(t->dict, out);
-              fprintf(out, "-----subdict   end-----\n");
+            m = container_of(d->val[i], mdict_t, data);
+            if (m->dict != NULL) {
+                fprintf(out, "%s%s%s%s\n", start, sec_start, d->key[i], sec_end);
+                dictionary_dump(m->dict, out);
+                continue;
             }
+            fprintf(out, "%s%20s\t= %s\n",
+                    start, d->key[i],
+                    d->val[i] ? d->val[i] : "UNDEF");
 
         }
     }
+
+out:
+    free(start);
+    free(sec_start);
+    free(sec_end);
     return ;
 }
 

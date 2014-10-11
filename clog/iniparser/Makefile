@@ -58,6 +58,7 @@ libiniparser.so:	$(OBJS)
 clean:
 	$(RM) $(OBJS)
 	$(RM) libiniparser.a libiniparser.so.0
+	@(cd test ; $(MAKE) clean)
 
 veryclean:
 	$(RM) $(OBJS) libiniparser.a libiniparser.so*

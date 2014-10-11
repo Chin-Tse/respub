@@ -45,6 +45,11 @@ void create_example_ini_file(void)
     "Year      = 1989 ;\n"
     "Country   = Spain ;\n"
     "Alcohol   = 12.5  ;\n"
+    "[Fruits]\n"
+    "[[south]]\n"
+    "Apple = 12.5  ;\n"
+    "[[North]]\n"
+    "Oringe = 13.5  ;\n"
     "\n");
     fclose(ini);
 }

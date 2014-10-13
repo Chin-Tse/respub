@@ -73,7 +73,7 @@ struct log_info{
 	struct stat_info stat;
 };
 
-struct ipv4_tuple{
+struct ipv4_tuple {
 	uint32_t s_ip;
 	uint32_t d_ip;
 	union{

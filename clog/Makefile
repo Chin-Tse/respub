@@ -19,6 +19,7 @@ CMLIBS 		= $(patsubst %, $(LIBDIR)/lib%.a, $(LIBSRC))
 CLN_LIBS= $(addprefix _clean_, $(LIBSRC))
 
 LDFLAGS += -L$(LIBDIR)
+LDFLAGS += $(patsubst %, -l%, $(LIBS))
 SOURCE  := $(wildcard $(TOPDIR)/$(SRCDIR)/*.c)
 OBJDIR 	:= obj
 OBJS    := $(patsubst $(TOPDIR)/%.c,$(TOPDIR)/$(OBJDIR)/%.o,$(SOURCE))

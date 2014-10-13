@@ -170,7 +170,7 @@ list_at(list_t *self, int index) {
     index = ~index;
   }
 
-  if (index < self->len) {
+  if ((unsigned int)index < self->len) {
     list_iterator_t *it = list_iterator_new(self, direction);
     list_node_t *node = list_iterator_next(it);
     while (index--) node = list_iterator_next(it);

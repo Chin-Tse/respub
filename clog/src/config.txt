@@ -14,6 +14,7 @@
   proto_name=6
   proto_num=7
   ifname=8
+
   rxpkt=10
   rxsize=11
   txpkt=13
@@ -40,7 +41,7 @@
 
 # improve to support multi-value stat in a item latter
 [auto-grp]
-#  agrp3=srcip, proto_name | syn | 1
+  agrp3=srcip, proto_name | syn | 1
 
 [spc-grp]
   [[sgrp1]]

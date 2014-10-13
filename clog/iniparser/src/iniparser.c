@@ -14,6 +14,7 @@
 #define ASCIILINESZ         (1024)
 #define INI_INVALID_KEY     ((char*)-1)
 #define STEP_STR            ("    ")
+#define SECT_APPEND         "-dict"
 
 /*---------------------------------------------------------------------------
                         Private to this module
@@ -126,7 +127,7 @@ int iniparser_getnsec(dictionary * d)
         if (d->val[i]==NULL)
             continue ;
         m = container_of(d->val[i], mdict_t, data);
-        if (!m->dict) {
+        if (m->dict) {
             nsec ++ ;
         }
     }
@@ -160,7 +161,7 @@ char * iniparser_getsecname(dictionary * d, int n)
             continue ;
         m = container_of(d->val[i], mdict_t, data);
         /* every section contain next level dict */
-        if (!m->dict) {
+        if (m->dict) {
             foundsec++ ;
             if (foundsec > n)
                 break ;
@@ -273,15 +274,43 @@ char ** iniparser_getseckeys(dictionary * d, char * s)
 /*--------------------------------------------------------------------------*/
 char * iniparser_getstring(dictionary * d, const char * key, char * def)
 {
-    char * lc_key ;
-    char * sval ;
+    char    *lc_key ;
+    char    *sval ;
+    char    *cur_key;
+    char    *dict_key;
+    mdict_t *m;
+    dictionary *cur_d;
 
     if (d==NULL || key==NULL)
         return def ;
 
     lc_key = xstrdup(key);
     strlwc(lc_key);
-    sval = dictionary_get(d, lc_key, def);
+
+    dict_key = lc_key;
+    cur_d = d;
+
+    /* get dict */
+    cur_key = strchr(lc_key, ':');
+    while (cur_key) {
+        cur_key[0] = '\0';
+        /* find subdict */
+        sval = dictionary_get(cur_d, dict_key, def);
+        if (sval == def) {
+            goto out;
+        }
+        m = container_of(sval, mdict_t, data);
+        if (!m->dict) {
+            goto out;
+        }
+        cur_d = m->dict;
+        cur_key++;
+        dict_key = cur_key;
+        cur_key = strchr(cur_key, ':');
+    }
+
+    sval = dictionary_get(cur_d, dict_key, def);
+out:
     free(lc_key);
     return sval ;
 }
@@ -446,11 +475,56 @@ mdict_t* iniparser_getmdict(dictionary * d, const char * key)
 /*--------------------------------------------------------------------------*/
 int iniparser_set(dictionary * ini, const char * entry, const char * val)
 {
-    int result = 0;
+    int     result = 0;
+    char    *cur_key;
+    char    *dict_key;
+    char    *sval;
+    mdict_t *m;
+    dictionary *cur_d;
+
+    char *dict_val = malloc(strlen(entry) + strlen("-dict") + 1);
     char *lc_entry = xstrdup(entry);
     strlwc(lc_entry);
-    result = dictionary_set(ini, lc_entry, val) ;
+
+
+    dict_key = lc_entry;
+    cur_d = ini;
+    
+    cur_key = strchr(lc_entry, ':');
+    while (cur_key) {
+        cur_key[0] = '\0';
+        /* find subdict */
+        sval = dictionary_get(cur_d, dict_key, INI_INVALID_KEY);
+        if (sval == INI_INVALID_KEY) {
+            sprintf(dict_val, "%s-dict", dict_key);
+            result = dictionary_set(cur_d, dict_key, dict_val);
+            if (result) {
+                goto out;
+            }
+            sval = dictionary_get(cur_d, dict_key, INI_INVALID_KEY);
+        }
+        m = container_of(sval, mdict_t, data);
+        if (!m->dict) {
+            m->dict = dictionary_new(0);
+            if (!m->dict) {
+                result = -1;
+                goto out;
+            }
+            m->parent = cur_d->mdict;
+            m->dict->mdict = m;
+            m->level = m->parent->level + 1;
+        }
+        cur_d = m->dict;
+        cur_key++;
+        dict_key = cur_key;
+        cur_key = strchr(cur_key, ':');
+    };
+    result = dictionary_set(cur_d, dict_key, val) ;
+
+out:
+    free(dict_val);
     free(lc_entry);
+
     return result;
 }
 
@@ -1044,6 +1118,7 @@ void iniparser_dumpsection_ini(dictionary * d, char * s, FILE * f)
         sprintf(sec_end, "%s]", sec_end);
     }
 
+    /* get subdict */
     m = container_of(val, mdict_t, data);
     if (!m->dict) {
         fprintf(f, "\n%s%20s = %s\n", start, s, val);
@@ -1052,6 +1127,7 @@ void iniparser_dumpsection_ini(dictionary * d, char * s, FILE * f)
     
     fprintf(f, "\n%s%s%s%s\n", start, sec_start, s, sec_end);
     iniparser_dump_ini(m->dict, f);
+
 out:
     if (start) {
         free(start);

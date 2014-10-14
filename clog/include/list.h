@@ -6,9 +6,9 @@
 //#include <linux/poison.h>
 //#include <linux/prefetch.h>
 
-
-
+#ifndef offsetof
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#endif
 
 /**
  * container_of - cast a member of a structure out to the containing structure
@@ -32,19 +32,14 @@
 #define LIST_POISON1  ((void *) 0x00100100)
 #define LIST_POISON2  ((void *) 0x00200200)
 
-
-
 /*prefetch.h*/
 static inline void prefetch(const void *x) {;}
 static inline void prefetchw(const void *x) {;}
-
-
 
 /*types.h*/
 struct list_head {
 	struct list_head *next, *prev;
 };
-
 
 /*
  * Simple doubly linked list implementation.

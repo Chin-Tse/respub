@@ -308,6 +308,24 @@ dictionary * iniparser_load(const char * ininame);
 /*--------------------------------------------------------------------------*/
 void iniparser_freedict(dictionary * d);
 
+/*--------------------------------------------------------------------------*/
+/**
+  @brief    Get sub dict
+  @param    d Dictionary
+  @param    key sub dict's key
+  @return   Pointer to sub-dictionary or NULL
+
+  Free all memory associated to an ini dictionary.
+  It is mandatory to call this function before the dictionary object
+  gets out of the current context.
+ */
+dictionary *iniparser_str_getsec(dictionary *d, const char *key);
+/*--------------------------------------------------------------------------*/
+
+dictionary *iniparser_idx_getsec(dictionary *d, int idx);
+
+char ** iniparser_getsecvals(dictionary * d, char * s);
+
 #ifdef __cplusplus
 }
 #endif

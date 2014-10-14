@@ -208,7 +208,59 @@ int iniparser_getsecnkeys(dictionary * d, char * s)
 
 /*-------------------------------------------------------------------------*/
 /**
-  @brief    Get the number of keys in a section of a dictionary.
+  @brief    Get the vals in a section of a dictionary.
+  @param    d   Dictionary to examine
+  @param    s   Section name of dictionary to examine
+  @return   pointer to statically allocated character strings
+
+  This function queries a dictionary and finds all vals in a given section.
+  Each pointer in the returned char pointer-to-pointer is pointing to
+  a string allocated in the dictionary; do not free or modify them.
+
+  This function returns NULL in case of error.
+ */
+/*--------------------------------------------------------------------------*/
+char ** iniparser_getsecvals(dictionary * d, char * s)
+{
+    char    **vals;
+    int     i, j ;
+    int     nkeys ;
+    char    *val;
+    mdict_t *m;
+
+    vals = NULL;
+
+    if (d==NULL) return vals;
+
+    val = iniparser_getstring(d, s, INI_INVALID_KEY);
+    if (val == INI_INVALID_KEY) {
+        return vals;
+    }
+    /* section is not exist */
+    m = container_of(val, mdict_t, data);
+    if (!m->dict) {
+        return vals;
+    }
+
+    nkeys = iniparser_getsecnkeys(d, s);
+
+    vals = (char**) malloc(nkeys*sizeof(char*));
+
+    i = 0;
+    for (j = 0 ; j < m->dict->size ; j++) {
+        if (m->dict->key[j]==NULL)
+            continue ;
+        vals[i] = d->val[j];
+        i++;
+    }
+
+    return vals;
+}
+
+/*-------------------------------------------------------------------------*/
+/*-------------------------------------------------------------------------*/
+/**
+  @brief    Get the keys in a section of a dictionary.
   @param    d   Dictionary to examine
   @param    s   Section name of dictionary to examine
   @return   pointer to statically allocated character strings
@@ -446,7 +498,7 @@ int iniparser_find_entry(
     return found ;
 }
 
-
+/*-------------------------------------------------------------------------*/
 mdict_t* iniparser_getmdict(dictionary * d, const char * key)
 {
     char    *   str ;
@@ -458,6 +510,37 @@ mdict_t* iniparser_getmdict(dictionary * d, const char * key)
     }
 
     return container_of(str, mdict_t, data);
+}
+
+dictionary *iniparser_str_getsec(dictionary *d, const char *key)
+{
+    return iniparser_getmdict(d, key)->dict;
+}
+
+dictionary *iniparser_idx_getsec(dictionary *d, int n)
+{
+    int     i ;
+    int     foundsec ;
+    mdict_t *m = NULL;
+
+    if (d==NULL || n<0) return NULL ;
+    foundsec=0 ;
+    for (i=0 ; i<d->size ; i++) {
+        if (d->key[i]==NULL)
+            continue ;
+        m = container_of(d->val[i], mdict_t, data);
+        /* every section contain next level dict */
+        if (m->dict) {
+            foundsec++ ;
+            if (foundsec > n)
+                break ;
+        }
+    }
+    if (foundsec<=n) {
+        return NULL ;
+    }
+
+    return m->dict ;
 }
 
 /*-------------------------------------------------------------------------*/

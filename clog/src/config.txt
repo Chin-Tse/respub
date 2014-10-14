@@ -1,24 +1,20 @@
-[path]
-  #input=/home/see/src/respub/stat/demo4.log
-  #input=/home/see/src/respub/stat/ipv4.log
-  input=/var/log/ipv4.log.0
-  output=/tmp/log/pkstat
 
+########## Innercfg:don't change this region ###########
 # this domain define the log file format
 # specify names for cols used by cfgitem latter
+# names should not be changed
 [log-format]
   srcip=2
   sport=3
   dstip=4
   dport=5
-  proto_name=6
   proto_num=7
   ifname=8
 
-  rxpkt=10
-  rxsize=11
-  txpkt=13
-  txsize=14
+  rxpkts=10
+  rxbytes=11
+  txpkts=13
+  txbytes=14
   syn=16
   synack=18
 
@@ -38,6 +34,16 @@
   txsize=12
   syn=10
   synack=10
+
+########## Innercfg : End     ###########
+
+
+########## user config region ###########
+[path]
+  #input=/home/see/src/respub/stat/demo4.log
+  #input=/home/see/src/respub/stat/ipv4.log
+  input=/var/log/ipv4.log.0
+  output=/tmp/log/pkstat
 
 # improve to support multi-value stat in a item latter
 [auto-grp]

@@ -97,6 +97,7 @@ void val_free(const char *v)
     
     if (t->dict != NULL) {
       dictionary_del(t->dict);
+      t->dict = NULL;
     }
     free(t);
 
@@ -182,7 +183,7 @@ void dictionary_del(dictionary * d)
     for (i=0 ; i<d->size ; i++) {
         if (d->key[i]!=NULL)
             free(d->key[i]);
-        if (d->val[i]!=NULL) {
+        if (d->val[i] != NULL) {
             val_free(d->val[i]);
         }
     }

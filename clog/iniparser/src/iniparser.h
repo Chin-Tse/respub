@@ -33,6 +33,15 @@ extern "C" {
 
 /*-------------------------------------------------------------------------*/
 /**
+  @brief    Get number of entyrs in a dictionary
+  @param    d   Dictionary to examine
+  @return   int Number of entrys found in dictionary
+ */
+/*--------------------------------------------------------------------------*/
+int iniparser_getentnum(dictionary * d);
+/*-------------------------------------------------------------------------*/
+
+/**
   @brief    Get number of sections in a dictionary
   @param    d   Dictionary to examine
   @return   int Number of sections found in dictionary

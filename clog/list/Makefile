@@ -32,7 +32,7 @@ bin/test: test.o $(OBJS)
 
 bin/benchmark: benchmark.o $(OBJS)
 	@mkdir -p bin
-	$(CC) $^ -o $@
+	$(CC) $^ -o $@ -lrt
 
 %.o: %.c
 	$(CC) $< $(CFLAGS) -c -o $@

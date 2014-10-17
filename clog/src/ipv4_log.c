@@ -263,7 +263,9 @@ void ipv4_log_help(void)
 		printf("\th or ?\tshow this usage\n");
 		return;
 }
-				
+
+
+#include "ipv4_cfg.h"
 int main(int argc,char* argv[])
 {
 	int i = 0 ;
@@ -271,6 +273,10 @@ int main(int argc,char* argv[])
 	int file_exist = 0;
 	FILE* file = NULL;
 	char tmp[64] = {'\0'};
+
+
+  dump_key_attr_map();
+  return 0;
 	
 	int c;
 	while((c = getopt(argc, argv, "w:W:c:s:f:h?")) != -1)

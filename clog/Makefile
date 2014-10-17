@@ -11,7 +11,7 @@ SRCDIR  = src
 INCDIR	=./include
 CFLAGS  += -g -I$(INCDIR) 
 
-LIBSRC 	= list iniparser
+LIBSRC 	= list iniparser astr
 LIBPRE	:= $(TOPDIR)
 LIBDIR 	:= $(LIBPRE)/lib
 CMLIBS 		= $(patsubst %, $(LIBDIR)/lib%.a, $(LIBSRC))

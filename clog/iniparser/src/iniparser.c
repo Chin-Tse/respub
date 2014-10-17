@@ -88,7 +88,7 @@ static void strstrip(char * s)
   @return   int Number of entrys found in dictionary
  */
 /*--------------------------------------------------------------------------*/
-int iniparser_entry_num(dictionary * d)
+int iniparser_getentnum(dictionary * d)
 {
     if (d==NULL) return 0;
 
@@ -399,7 +399,7 @@ int iniparser_getint(dictionary * d, const char * key, int notfound)
     char    *   str ;
 
     str = iniparser_getstring(d, key, INI_INVALID_KEY);
-    if (str==INI_INVALID_KEY) return notfound ;
+    if (str==INI_INVALID_KEY) return notfound;
     return (int)strtol(str, NULL, 0);
 }
 

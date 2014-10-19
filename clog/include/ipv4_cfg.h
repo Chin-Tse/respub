@@ -54,6 +54,7 @@ typedef struct _condition_ {
   uint64_t          threshold;      /* threshold */
   uint32_t           offset;         /* offset in st_t */
   uint32_t           len;            /* cmp size */
+  uint32_t           ref;            /* refcnt */
 } cond_t;
 
 /* stat */
@@ -128,6 +129,9 @@ key_st_t *ipv4_kst_malloc(void);
  * @param kst [in] Pointer of kst
  */
 void ipv4_kst_free(key_st_t *kst);
+
+cond_t *ipv4_cfg_cond_get(char *stkey, char *thrd);
+void ipv4_cfg_cond_free(cond_t *cond);
 
 acfg_item_t *ipv4_cfg_aitem_get(char *aname, char *cfgval);
 void ipv4_cfg_aitem_free(acfg_item_t *acfg_item);

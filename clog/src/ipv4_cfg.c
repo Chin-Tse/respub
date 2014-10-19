@@ -172,7 +172,9 @@ void ipv4_cfg_stm_free(st_item *stm)
  *
  * @param kst [in] kst 
  *
- * @return  0 -- success, other -- failure  
+ * @return  Pointer -- success, NULL -- failure  
+ *
+ * Called when new instance generate
  */
 key_st_t *ipv4_cfg_kst_ref(key_st_t *kst)
 {
@@ -185,6 +187,7 @@ key_st_t *ipv4_cfg_kst_ref(key_st_t *kst)
   if (!nkst) {
     return NULL;
   }
+  /* copy Pointer: next/cond/name, and other attr */
   memcpy(nkst, kst, sizeof(key_st_t) - sizeof(struct hlist_head) * HASH_SIZE);
   INIT_LIST_HEAD(&kst->list);
   memset(nkst->hlist, 0, sizeof(struct hlist_head) * HASH_SIZE);
@@ -196,6 +199,8 @@ key_st_t *ipv4_cfg_kst_ref(key_st_t *kst)
  * @brief Release kst, include it's sub-kst and instance
  *
  * @param kst [in] Pointer of kst
+ *
+ * Called when instance del/free
  */
 void ipv4_cfg_kst_release(key_st_t *kst)
 {
@@ -219,6 +224,9 @@ void ipv4_cfg_kst_release(key_st_t *kst)
     }
   }
 
+  /* only free cur kst, don't free next/name/cond thing */
+  free(kst);
+
   return;
 }
 
@@ -226,6 +234,8 @@ void ipv4_cfg_kst_release(key_st_t *kst)
  * @brief Malloc a new kst instance
  *
  * @return  Pointer to kst -- success, NULL -- failure  
+ *
+ * Mostly called when generate new config
  */
 key_st_t *ipv4_cfg_kst_malloc(void)
 {
@@ -248,11 +258,14 @@ key_st_t *ipv4_cfg_kst_malloc(void)
  * @brief Free kst, include it's sub-kst and instance
  *
  * @param kst [in] Pointer of kst
+ *
+ * This func called when config item delete
  */
 void ipv4_cfg_kst_free(key_st_t *kst)
 {
   int         i;
   st_item     *st;
+  cond_t      *cpos, *cn;
 
   struct hlist_node  *pos, *n;  
 
@@ -263,13 +276,23 @@ void ipv4_cfg_kst_free(key_st_t *kst)
   /* remote from list */
   list_del(&kst->list);
   
-  /* only free do this */
+  /* only free (release not) do this */
   if (kst->next) {
+    /* this domain don't free in sub-kst */
+    kst->next->cond = NULL;
     ipv4_cfg_kst_free(kst->next);
   }
 
   if (kst->name) {
     free(kst->name);
+  }
+
+  /* only free in top kst */
+  if (kst->cond) {
+    list_for_each_entry_safe(cpos, cn, &kst->cond->list, list) {
+      ipv4_cfg_cond_free(cpos);
+    }
+    ipv4_cfg_cond_free(kst->cond);
   }
 
   /* delete stm */
@@ -328,6 +351,10 @@ void ipv4_cfg_cond_free(cond_t *cond)
     return;
   }
 
+  if (--cond->ref) {
+    return;
+  }
+
   list_del(&cond->list);
 
   if (cond->name) {
@@ -361,9 +388,11 @@ cond_t *ipv4_cfg_cond_get(char *stkey, char *thrd)
   if (cond->name) {
     goto err;
   }
+  INIT_LIST_HEAD(&cond->list);
   cond->offset = stattr->st_off;
   cond->len = stattr->st_len;
-  INIT_LIST_HEAD(&cond->list);
+  cond->threshold = (uint64_t)strtoll(thrd, NULL, 0);
+  cond->ref = 1;
 
   return cond;
 err:
@@ -467,14 +496,12 @@ void ipv4_cfg_aitem_free(acfg_item_t *acfg_item)
   return;
 }
 
-
-
 key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
 {
   key_st_t    *kst;
   key_st_t    *okst = NULL;
   key_st_t    *atkst = NULL;
-  cond_t      *cond;
+  cond_t      *cond, *pos, *n;
   cond_t      *tcond = NULL;
   cond_t      *atcond = NULL;
 
@@ -489,6 +516,7 @@ key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
     while ( okst->kst_type == KST_SPEC && okst->next) {
       okst = okst->next;
     }
+    tcond = tkst->cond;
   }
 
   /* Generate KST for each agp key */
@@ -519,12 +547,42 @@ key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
     if (!cond) {
       goto err;
     }
+    if (atcond == NULL) {
+      atcond = cond;
+      if (!tcond) {
+        tcond = atcond;
+      } else {
+        list_add_tail(&atcond->list, &tcond->list);
+      }
+    } else {
+      list_add_tail(&cond->list, &tcond->list);
+    }
+  }
+
+  /* sub-kst get the same cond with tskt */
+  kst = tkst ? tkst->next : NULL;
+  while (kst) {
+    kst->cond = tcond;
+    kst = kst->next;
   }
 
   return atkst;
 err:
   if (atkst) {
     ipv4_cfg_kst_free(atkst);
+  }
+  if (atcond) {
+    if (tcond != atcond) {
+      pos = atcond;
+      list_for_each_entry_safe_from(pos, n, &tcond->list, list) {
+        ipv4_cfg_cond_free(pos);
+      }
+    } else {
+      list_for_each_entry_safe(pos, n, &tcond->list, list) {
+        ipv4_cfg_cond_free(pos);
+      }
+      ipv4_cfg_cond_free(tcond);
+    }
   }
 
   return NULL;
@@ -559,6 +617,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
     return NULL;
   }
 
+  /* generate config kst-list */
   okst = NULL;
   for (i = 0; i < num; i++) {
     if (iniparser_find_entry(ifmt_cfg, keys[i])) {
@@ -582,8 +641,14 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
       continue;
     } else {
       acfg_item = ipv4_cfg_aitem_get(keys[i], vals[i]);
+      kst = ipv4_cfg_aitem_add(tkst, acfg_item);
+      if (!tkst) {
+        tkst = kst;
+      }
     }
   }
+
+  /* kst-list is ready, add special stm */
 
 err:
   if (kst) {

@@ -36,6 +36,7 @@ $(TOPDIR)/$(OBJDIR)/%.o: $(TOPDIR)/%.c
 	$(CC) -c $(CFLAGS)  -o $@ $< $(LDFLAGS)
 
 $(CMLIBS):
+	@mkdir -p $(LIBDIR)
 	$(MAKE) -C $(patsubst $(LIBDIR)/lib%.a, %, $@) PREFIX=$(LIBPRE) install
 
 $(CLN_LIBS):

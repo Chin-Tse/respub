@@ -268,18 +268,19 @@ void ipv4_log_help(void)
 #include "ipv4_cfg.h"
 int main(int argc,char* argv[])
 {
-	int i = 0 ;
-	int j = 0;
-	int file_exist = 0;
-	FILE* file = NULL;
-	char tmp[64] = {'\0'};
+	int   i = 0 ;
+	int   j = 0;
+	int   file_exist = 0;
+  int   testid;
 
+	FILE  *file = NULL;
+	char  tmp[64] = {'\0'};
 
   dump_key_attr_map();
   return 0;
 	
 	int c;
-	while((c = getopt(argc, argv, "w:W:c:s:f:h?")) != -1)
+	while((c = getopt(argc, argv, "t:w:W:c:s:f:h?")) != -1)
 	{
 		switch(c)
 		{
@@ -321,6 +322,10 @@ int main(int argc,char* argv[])
 			break;
 		case '?':
 		case 'h':
+		case 't':
+			testid = atol(optarg);
+      fprintf(stderr, "TestSuit:%d\n", testid);
+      return;
 		default:
 			ipv4_log_help();
 			return 0;

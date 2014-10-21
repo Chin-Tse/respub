@@ -24,8 +24,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "iniparser.h"
 #include "list.h"
+#include "iniparser.h"
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -52,9 +52,9 @@ typedef struct _condition_ {
   struct list_head  list;
   char              *name;          /* stat col name */
   uint64_t          threshold;      /* threshold */
-  uint32_t           offset;         /* offset in st_t */
-  uint32_t           len;            /* cmp size */
-  uint32_t           ref;            /* refcnt */
+  uint32_t          offset;         /* offset in st_t */
+  uint32_t          len;            /* cmp size */
+  uint32_t          ref;            /* refcnt */
 } cond_t;
 
 /* stat */
@@ -97,6 +97,52 @@ typedef struct _cfgitem_ {
   key_st_t            *keyst;
 } cfg_t;
 
+/* Parse func-type define */
+typedef void (*ipv4_parse_f)(char *, int, char*);
+
+/* key domain */
+typedef struct _kmap_ {
+    char          *kname;
+    uint8_t       offset;
+    uint8_t       ilen;
+    uint8_t       olen;
+    ipv4_parse_f  parse_func;
+    uint8_t       st_off;
+    uint8_t       st_len;
+} kattr_map_t;
+
+/* organize key attr in order of col to speed up parse */
+typedef struct _ilog_kattr_ {
+  int         num;
+  kattr_map_t kattr[0];
+} ilog_kattr_t;
+
+/**
+ * @brief Compute the hash key for a mem region
+ *
+ * @param mem [in] Memory Pointer
+ * @param len [in] Memory length
+ *
+ * @return  hash 
+ */
+uint32_t ipv4_cfg_hash(char *mem, int len);
+
+/**
+ * @brief Malloc a new st_item
+ *
+ * @param kst [in] special the key stat instance that this stm belongs to
+ *
+ * @return  Pointer to stm -- success, NULL -- failure  
+ */
+st_item *ipv4_cfg_stm_malloc(key_st_t *kst);
+
+/**
+ * @brief Free the Stm and its sub-kst
+ *
+ * @param stm [in] Pointer to stm 
+ */
+void ipv4_cfg_stm_free(st_item *stm);
+
 /**
  * @brief Malloc a new st_item
  *
@@ -136,10 +182,15 @@ void ipv4_cfg_cond_free(cond_t *cond);
 acfg_item_t *ipv4_cfg_aitem_get(char *aname, char *cfgval);
 void ipv4_cfg_aitem_free(acfg_item_t *acfg_item);
 
+char *ipv4_cfg_get_ifile(dictionary *dcfg);
+char *ipv4_cfg_get_ofile(dictionary *dcfg);
+
 /**
  * @brief dump Key attr map
  */
 void dump_key_attr_map(void);
+
+void test_cfg(void);
 
 #endif		//__IPV4_CFG_H
 

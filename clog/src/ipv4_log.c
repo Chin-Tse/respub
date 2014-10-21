@@ -137,7 +137,7 @@ int rename_log_file(void)
     int i;
     char cmd[128];
     int len = 0;
-	static int log_file_cnt = 0;
+	  static int log_file_cnt = 0;
     if(log_file_cnt == log_file_max_cnt)
     {
             len = snprintf(cmd,128,"rm -f %s.%d ",log_file,log_file_cnt);
@@ -266,6 +266,8 @@ void ipv4_log_help(void)
 
 
 #include "ipv4_cfg.h"
+
+#if 0
 int main(int argc,char* argv[])
 {
 	int   i = 0 ;
@@ -277,6 +279,7 @@ int main(int argc,char* argv[])
 	char  tmp[64] = {'\0'};
 
   dump_key_attr_map();
+  test_cfg();
   return 0;
 	
 	int c;
@@ -374,5 +377,6 @@ int main(int argc,char* argv[])
 	g_time = time(NULL);
 	ipv4_log_stat(file);
 }
+#endif
 
 

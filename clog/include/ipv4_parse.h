@@ -43,9 +43,6 @@ typedef struct _in_log_{
 
 } ilog_t;
 
-/* Parse func-type define */
-typedef void (*ipv4_parse_f)(char *, int, char*);
-
 /**
  * @brief parse iptype string to mem with uint32_t format
  *

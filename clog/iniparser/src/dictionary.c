@@ -20,6 +20,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef container_of
+#define container_of(ptr, type, member) ( (type *)( (char *)ptr - offsetof(type,member) ))
+#endif
+
 /** Maximum value size for integers and doubles. */
 #define MAXVALSZ    1024
 

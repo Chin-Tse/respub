@@ -28,23 +28,6 @@
 #define ST_OFFSET(key)  offsetof(st_t, key)
 #define ST_ILEN(key)    sizeof(((st_t*)0)->key)
 
-/* key domain */
-typedef struct _kmap_ {
-    char          *kname;
-    uint8_t       offset;
-    uint8_t       ilen;
-    uint8_t       olen;
-    ipv4_parse_f  parse_func;
-    uint8_t       st_off;
-    uint8_t       st_len;
-} kattr_map_t;
-
-/* organize key attr in order of col to speed up parse */
-typedef struct _ilog_kattr_ {
-  int         num;
-  kattr_map_t kattr[0];
-} ilog_kattr_t;
-
 /* domain cfg arry */
 kattr_map_t key_attr_map[] = {
   {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip},
@@ -68,8 +51,9 @@ kattr_map_t key_attr_map[] = {
     ST_OFFSET(txbytes), ST_ILEN(txbytes)},
 };
 
-/* config list */
+/* config list 
 struct list_head cfg_list = LIST_HEAD_INIT(cfg_list);
+*/
 
 /* format-cfg */
 char        *infile_name;
@@ -132,12 +116,12 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
     nkst = ipv4_cfg_kst_ref(kst->next);
     list_add_tail(&nkst->list, &stm->kst_list);
 
-    /* next level kst maybe a list 
+    /* next level kst maybe a list */
     key_st_t  *nnkst, *pos;
     list_for_each_entry(pos, &kst->next->list, list) {
       nnkst = ipv4_cfg_kst_ref(pos);
       list_add_tail(&nnkst->list, &stm->kst_list);
-    } */
+    } 
   }
 
   return stm;
@@ -326,6 +310,7 @@ int ipv4_cfg_kst_init(key_st_t *kst, const char *key)
 
   kattr = ipv4_cfg_kattr_get(key);
   if (!kattr) {
+    fprintf(stderr, "Error config, Key error:%s!\n", key);
     return -EINVAL;
   }
   kst->offset = kattr->offset;
@@ -379,7 +364,7 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
     stm->tm = 0;
     kattr->parse_func(stm->data, kst->ilen, val);
     hash = ipv4_cfg_hash(stm->data, kst->ilen);
-    hlist_add_head(&stm->hn, &kst->hlist[hash])
+    hlist_add_head(&stm->hn, &kst->hlist[hash]);
   }
  
   return stm;
@@ -417,6 +402,7 @@ cond_t *ipv4_cfg_cond_get(char *stkey, char *thrd)
   }
   stattr = ipv4_cfg_kattr_get(stkey);
   if (!stattr) {
+    fprintf(stderr, "Error config, Key error:%s!\n", stkey);
     return NULL;
   }
 
@@ -425,7 +411,7 @@ cond_t *ipv4_cfg_cond_get(char *stkey, char *thrd)
     return NULL;
   }
   cond->name = strdup(stkey);
-  if (cond->name) {
+  if (!cond->name) {
     goto err;
   }
   INIT_LIST_HEAD(&cond->list);
@@ -461,18 +447,15 @@ acfg_item_t *ipv4_cfg_aitem_get(char *aname, char *cfgval)
     return NULL;
   }
 
-  printf("======key====:%s\n", key);
-
   iv = occurrences("|", key) + 1;
   ptr = malloc(sizeof(char *) * iv);
   if (!ptr) {
     goto out;
   }
   strsplit(key, ptr, "|"); 
-  if (iv < 2) {
+  if (iv < 3) {
     goto out;
   }
-  printf("======iv====:%d\n", iv);
 
   acfg_item = malloc(sizeof(acfg_item_t));
   if (!acfg_item) {
@@ -482,7 +465,6 @@ acfg_item_t *ipv4_cfg_aitem_get(char *aname, char *cfgval)
   acfg_item->nk = occurrences(",", ptr[0]) + 1;
   acfg_item->keys = malloc(sizeof(char *) * acfg_item->nk);
   strsplit(ptr[0], acfg_item->keys, ",");
-  printf("======iv====:%d\n", iv);
 
   acfg_item->ns = occurrences(",", ptr[1]) + 1;
   acfg_item->stat= malloc(sizeof(char *) * acfg_item->ns);
@@ -581,6 +563,7 @@ key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
     }
     okst = kst;
   }
+  
   /* Generate ST_THRD_INS */
   for (j = 0; j < acfg_item->ns; j++) {
     cond = ipv4_cfg_cond_get(acfg_item->stat[j], acfg_item->threshold[j]);
@@ -600,14 +583,17 @@ key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
   }
 
   /* sub-kst get the same cond with tskt */
-  kst = tkst ? tkst->next : NULL;
+  kst = tkst ? tkst : atkst;
+  
   while (kst) {
     kst->cond = tcond;
     kst = kst->next;
   }
 
   return atkst;
+
 err:
+  fprintf(stderr, "Error: add aitem!\n");
   if (atkst) {
     ipv4_cfg_kst_free(atkst);
   }
@@ -643,18 +629,12 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
   key_st_t    *tkst = NULL;
   key_st_t    *kst, *okst;
   dictionary  *ifmt_cfg;
-  dictionary  *ofmt_cfg;
   acfg_item_t *acfg_item = NULL;
   st_item     *stm = NULL;
 
   /* get sub config, not need to free sub-dict */
   ifmt_cfg = iniparser_str_getsec(dcfg, IFMT_CFG);
   if (!ifmt_cfg) {
-    return NULL;
-  }
-  
-  ofmt_cfg = iniparser_str_getsec(dcfg, OFMT_CFG);
-  if (!ofmt_cfg) {
     return NULL;
   }
 
@@ -694,12 +674,23 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
   for (i = 0; i < num; i++) {
     if (iniparser_find_entry(ifmt_cfg, keys[i])) {
       if (!kst) {
-        goto err;
+        fprintf(stderr, "Check config item: %s = %s!", keys[i], vals[i]);
+        break;
       }
-      kst = ipv4_cfg_kst_stm_init(kst, vals[i])) 
+      stm = ipv4_cfg_kst_stm_init(kst, keys[i], vals[i]);
+
+      if (!stm) {
+        fprintf(stderr, "Add config stm fail!\n");
+        break;
+      }
+      if (!list_empty(&stm->kst_list)) {
+        kst = list_first_entry(&stm->kst_list, key_st_t, list);
+      } else {
+        kst = NULL;
+      }
+    } else {
+      break;
     }
-    kst = kst->next;
-    assert(kst);
   }
 
   return tkst;
@@ -745,11 +736,18 @@ int ipv4_cfg_sgpcfg_gen(struct list_head *cfg, dictionary *dcfg)
     knum = iniparser_getsecnkeys(sdict, cfgitem->name);
     keys = iniparser_getseckeys(sdict, cfgitem->name);
     vals = iniparser_getsecvals(sdict, cfgitem->name);
+
+    for (j = 0; j < knum; j++) {
+      printf("knum:%d, keys[%d] %s, vals[%d] %s\n", 
+          knum, j, keys[j], j, vals[j]);
+    }
+
     cfgitem->keyst = ipv4_cfg_item_init(knum, keys, vals, dcfg);
+
     if (!cfgitem->keyst) {
       continue;
     }
-    list_add_tail(&cfg->list, cfg);
+    list_add_tail(&cfgitem->list, cfg);
   }
 
   return 0;
@@ -789,7 +787,7 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
   char          **keys = NULL;
   int           col, space, max_col;
 
-  if (dcfg == NULL || map == NULL) {
+  if (dcfg == NULL) {
     return NULL;
   }
 
@@ -820,15 +818,12 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
   ilog_kattr->num = max_col;
   for (i = 0; i < isize; i++) {
     col = iniparser_getint(ifmt_cfg, keys[i], -1);
-    if (col < 0) {
-      continue;
-    }
+    assert(col >= 0);
 
     kattr = ipv4_cfg_kattr_get(keys[i]);
-    if (kattr) {
-      kattr->olen = iniparser_getint(ofmt_cfg, keys[i], DEF_OLEN);
-      memcpy(&ilog_kattr->kattr[col], kattr, sizeof(kattr_map_t));
-    }
+    assert(kattr);
+    kattr->olen = iniparser_getint(ofmt_cfg, keys[i], DEF_OLEN);
+    memcpy(&ilog_kattr->kattr[col], kattr, sizeof(kattr_map_t));
   }
 
 out:
@@ -846,24 +841,23 @@ out:
  *
  * @return  0 -- success, other -- failure  
  */
-int ipv4_readcfg(char *cfgname, 
+dictionary *ipv4_readcfg(char *cfgname, 
     struct list_head  *cfglist,
     ilog_kattr_t      **pp_ikat)
 {
   int           rv = 0;
-  dictionary    *dcfg;
-  ilog_kattr_t  *pilog_kattr;
+  dictionary    *dcfg = NULL;
+  ilog_kattr_t  *pilog_kattr = NULL;
 
   if (cfglist == NULL || pp_ikat == NULL) {
-    return -EINVAL;
+    return NULL;
   }
 
   dcfg = iniparser_load(CFG_FILE);
   if (!dcfg) {
-    rv = -ENOENT;
     goto out;
   }
-  
+
   pilog_kattr = ipv4_cfg_kattr_init(dcfg);
   if (!pilog_kattr) {
     goto out;
@@ -876,17 +870,53 @@ int ipv4_readcfg(char *cfgname,
     goto out;
   }
 
-  return rv;;
+  return dcfg;
   
 out:
   if (dcfg) {
     iniparser_freedict(dcfg);
+    dcfg = NULL;
   }
+
   if (pilog_kattr) {
     free(pilog_kattr);
   }
 
-  return rv;
+  return NULL;
+}
+
+
+void ipv4_release_cfg(
+    dictionary        *dcfg,
+    struct list_head  *cfglist, 
+    ilog_kattr_t      *pp_ikat)
+{
+  return;
+}
+
+/**
+ * @brief Get stat input log file path
+ *
+ * @param dcfg [in] config dict
+ *
+ * @return  0 -- path str, other -- NULL 
+ */
+char *ipv4_cfg_get_ifile(dictionary *dcfg)
+{
+  char *filename;
+
+  filename = iniparser_getstring(dcfg, IPATH_CFG, NULL);
+
+  return filename;
+}
+
+char *ipv4_cfg_get_ofile(dictionary *dcfg)
+{
+  char *filename;
+
+  filename = iniparser_getstring(dcfg, OPATH_CFG, NULL);
+
+  return filename;
 }
 
 /**
@@ -912,7 +942,7 @@ void hexprint_buf(
       printf( " " );
     }
 
-    if (i % cols == 1 && prestr) {
+    if (i % cols == 0 && prestr) {
       printf("%s", prestr);
     }
 
@@ -926,6 +956,8 @@ void hexprint_buf(
       printf("\n");
     }
   }
+
+  printf("\n");
 
   return;
 }
@@ -978,18 +1010,23 @@ void dump_key_attr_map(void)
 void dump_stm(key_st_t *kst, int prefix)
 {
   int         prelen;
+  char        *prestr;
+  int         i;
   st_item     *stm;
+  key_st_t    *kpos, *kn;  
   struct hlist_node *pos, *n;  
-  struct key_st_t   *kpos, *kn;  
+
+  if (!kst) {
+    return;
+  }
 
   prelen = 1;
-  if (prefix) {
+  if (prefix > 0) {
     prelen = strlen("  ") * prefix + 1;
-  } else {
-    prestr = malloc(prelen);
   }
+  
   prestr = malloc(prelen);
-  memset(prestr, ' ', prelen);
+  memset(prestr, ' ', prelen - 1);
   prestr[prelen - 1] = '\0';
 
   /* dump stm */
@@ -1000,14 +1037,15 @@ void dump_stm(key_st_t *kst, int prefix)
 
     hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
       printf("%sstm:%s, curkst:%p, tm:%lu\n", 
-          stm->curkst->name, stm->curkst, stm->tm);
-      hexprint_buf(stm->data, stm->len, 16, 4, prestr);
+          prestr, stm->curkst->name, stm->curkst, stm->tm);
+      hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
 
       list_for_each_entry(kpos, &stm->kst_list, list) {
         dump_stm(kpos, prefix + 1);
       }
     }
   }
+  
   free(prestr);
 
   return;
@@ -1032,52 +1070,54 @@ void dump_kst(key_st_t *kst, int prefix)
   prelen = 1;
   if (prefix) {
     prelen = strlen("  ") * prefix + 1;
-  } else {
-    prestr = malloc(prelen);
-  }
+  } 
+
   prestr = malloc(prelen);
   memset(prestr, ' ', prelen);
   prestr[prelen - 1] = '\0';
 
   printf("%sname:%s, %p\n", prestr, kst->name, (void*)kst);
   printf("%soffset:%u, ilen:%u, olen:%u\n", 
-      kst->offset, kst->len, kst->olen);
+      prestr, kst->offset, kst->ilen, kst->olen);
 
   /* only free in top kst */
   if (kst->cond) {
+    cpos = kst->cond;
+    printf("%scond:%s, cur:%p\n", 
+          prestr, cpos->name, (void *)cpos);
+    printf("%sthreshold:%lu\n", prestr, cpos->threshold);
+    printf("%soffset:%u\n", prestr, cpos->offset);
+    printf("%slen:%u\n", prestr, cpos->len);
+
     list_for_each_entry_safe(cpos, cn, &kst->cond->list, list) {
       printf("%scond:%s, cur:%p, next:%p\n", 
-          prestr, cpos->name, (void *)cpos, (void *)cpos->next);
+          prestr, cpos->name, (void *)cpos, (void *)cn);
 
       printf("%sthreshold:%lu\n", prestr, cpos->threshold);
       printf("%soffset:%u\n", prestr, cpos->offset);
       printf("%slen:%u\n", prestr, cpos->len);
     }
-    cpos = kst->cond;
-    printf("%scond:%s, cur:%p, next:%p\n", 
-          prestr, cpos->name, (void *)cpos, (void *)cpos->next);
-    printf("%sthreshold:%lu\n", prestr, cpos->threshold);
-    printf("%soffset:%u\n", prestr, cpos->offset);
-    printf("%slen:%u\n", prestr, cpos->len);
   }
 
   if (kst->next) {
     dump_kst(kst->next, prefix + 1);
   }
 
+  free(prestr);
+
   return;
 }
 
 void dump_config(struct list_head *cfglist)
 {
-  key_st_t    *kst;
+  cfg_t    *cfg;
 
   if (cfglist ==  NULL) {
     return;
   }
-  list_for_each_entry(kst, cfglist, list) {
-    dump_kst(kst);
-    dump_stm(kst);
+  list_for_each_entry(cfg, cfglist, list) {
+    dump_kst(cfg->keyst, 0);
+    dump_stm(cfg->keyst, 0);
   }
 
   return;
@@ -1087,12 +1127,16 @@ void test_cfg(void)
 {
   struct list_head cfg_list = LIST_HEAD_INIT(cfg_list);
   ilog_kattr_t *pilat;
+  dictionary    *dcfg;
+  
+  dcfg = ipv4_readcfg("./config.txt", &cfg_list, &pilat);
 
-  if (ipv4_readcfg("./config.txt", &cfg_list, &pilat)) {
+  if (!dcfg) {
     return;
   }
 
   dump_config(&cfg_list);
+  ipv4_release_cfg(dcfg, &cfg_list, pilat);
 
   return;
 }

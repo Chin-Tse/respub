@@ -16,6 +16,10 @@
 #define STEP_STR            ("    ")
 #define SECT_APPEND         "-dict"
 
+#ifndef container_of
+#define container_of(ptr, type, member) ( (type *)( (char *)ptr - offsetof(type,member) ))
+#endif
+
 /*---------------------------------------------------------------------------
                         Private to this module
  ---------------------------------------------------------------------------*/
@@ -250,7 +254,7 @@ char ** iniparser_getsecvals(dictionary * d, char * s)
     for (j = 0 ; j < m->dict->size ; j++) {
         if (m->dict->key[j]==NULL)
             continue ;
-        vals[i] = d->val[j];
+        vals[i] = m->dict->val[j];
         i++;
     }
 
@@ -302,7 +306,7 @@ char ** iniparser_getseckeys(dictionary * d, char * s)
     for (j = 0 ; j < m->dict->size ; j++) {
         if (m->dict->key[j]==NULL)
             continue ;
-        keys[i] = d->key[j];
+        keys[i] = m->dict->key[j];
         i++;
     }
 

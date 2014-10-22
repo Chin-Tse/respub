@@ -1,4 +1,28 @@
+########## user config region ###########
+[path]
+  #input=/home/see/src/respub/stat/demo4.log
+  input=/home/see/work/src/respub/clog/ipv4.log
+  output=/tmp/log/pkstat
 
+[time]
+interval = 3
+
+# improve to support multi-value stat in a item latter
+[auto-grp]
+  agrp3=srcip, proto_num| syn | 1
+
+[spc-grp]
+  [[sgrp1]]
+    # keyword must be list in 'log-format'
+    dport=138
+    dstip=172.16.0.255
+    
+    #should not be the any key list in 'log-options'
+    agrp_qq = srcip | rxpkts | 1
+
+  # diffrent config item should not take a repeated name
+  # otherwise it cause fault Error
+ 
 ########## Innercfg:don't change this region ###########
 # this domain define the log file format
 # specify names for cols used by cfgitem latter
@@ -38,26 +62,4 @@
 ########## Innercfg : End     ###########
 
 
-########## user config region ###########
-[path]
-  #input=/home/see/src/respub/stat/demo4.log
-  #input=/home/see/src/respub/stat/ipv4.log
-  input=/var/log/ipv4.log.0
-  output=/tmp/log/pkstat
-
-# improve to support multi-value stat in a item latter
-[auto-grp]
-  agrp3=srcip, proto_num| syn | 1
-
-[spc-grp]
-  [[sgrp1]]
-    # key must list in 'log-options'
-    dport=80
-    dstip=192.168.1.1
-    
-    #should not be the any key list in 'log-options'
-    agrp_qq = srcip | rxpkts | 200
-
-  # diffrent config item should not take a repeated name
-  # otherwise it cause fault Error
-  
+ 

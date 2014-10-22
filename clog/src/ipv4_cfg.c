@@ -16,7 +16,8 @@
 #define DEF_OLEN    (12)
 #define CFG_FILE    "./config.txt"
 #define IPATH_CFG    "path:input"
-#define OPATH_CFG    "path:ouput"
+#define OPATH_CFG    "path:output"
+#define TIME_CFG     "time:interval"
 
 #define IFMT_CFG    "log-format"
 #define OFMT_CFG    "outlog-format"
@@ -30,12 +31,18 @@
 
 /* domain cfg arry */
 kattr_map_t key_attr_map[] = {
-  {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip},
-  {"dstip", KEY_OFFSET(dstip), KEY_ILEN(dstip), DEF_OLEN, ipv4_parse_ip},
-  {"sport", KEY_OFFSET(sport), KEY_ILEN(sport), DEF_OLEN, ipv4_parse_uint16},
-  {"dport", KEY_OFFSET(dport), KEY_ILEN(dport), DEF_OLEN, ipv4_parse_uint16},
-  {"proto_num", KEY_OFFSET(proto_num), KEY_ILEN(proto_num), DEF_OLEN, ipv4_parse_uint8},
-  {"ifname", KEY_OFFSET(ifname), KEY_ILEN(ifname), DEF_OLEN, ipv4_parse_str},
+  {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip,
+  0,0, ipv4_parse_ip2str},
+  {"dstip", KEY_OFFSET(dstip), KEY_ILEN(dstip), DEF_OLEN, ipv4_parse_ip,
+  0,0, ipv4_parse_ip2str},
+  {"sport", KEY_OFFSET(sport), KEY_ILEN(sport), DEF_OLEN, ipv4_parse_uint16, 
+  0,0, ipv4_parse_uint16_str},
+  {"dport", KEY_OFFSET(dport), KEY_ILEN(dport), DEF_OLEN, ipv4_parse_uint16,
+  0,0, ipv4_parse_uint16_str},
+  {"proto_num", KEY_OFFSET(proto_num), KEY_ILEN(proto_num), DEF_OLEN, ipv4_parse_uint8,
+  0,0, ipv4_parse_uint8_str},
+  {"ifname", KEY_OFFSET(ifname), KEY_ILEN(ifname), DEF_OLEN, ipv4_parse_str,
+  0,0,ipv4_parse_str2str},
 
   {"syn", KEY_OFFSET(syn), KEY_ILEN(syn), DEF_OLEN, ipv4_parse_uint32, 
     ST_OFFSET(syn), ST_ILEN(syn)},
@@ -46,9 +53,9 @@ kattr_map_t key_attr_map[] = {
   {"txpkts", KEY_OFFSET(txpkts), KEY_ILEN(txpkts), DEF_OLEN, ipv4_parse_uint32,
     ST_OFFSET(txpkts), ST_ILEN(txpkts)},
   {"rxbytes", KEY_OFFSET(rxbytes), KEY_ILEN(rxbytes), DEF_OLEN, ipv4_parse_uint64,
-    ST_OFFSET(rxbytes), ST_ILEN(rxbytes)},
+    ST_OFFSET(rxbytes), ST_ILEN(rxbytes), ipv4_parse_uint64_str},
   {"txbytes", KEY_OFFSET(txbytes), KEY_ILEN(txbytes), DEF_OLEN, ipv4_parse_uint64,
-    ST_OFFSET(txbytes), ST_ILEN(txbytes)},
+    ST_OFFSET(txbytes), ST_ILEN(txbytes), ipv4_parse_uint64_str},
 };
 
 /* config list 
@@ -316,6 +323,7 @@ int ipv4_cfg_kst_init(key_st_t *kst, const char *key)
   kst->offset = kattr->offset;
   kst->ilen = kattr->ilen;
   kst->olen = kattr->olen;
+  kst->upfunc = kattr->upfunc;
   kst->name = xstrdup(kattr->kname);
   if (!kst->name) {
     return -ENOMEM;
@@ -737,10 +745,11 @@ int ipv4_cfg_sgpcfg_gen(struct list_head *cfg, dictionary *dcfg)
     keys = iniparser_getseckeys(sdict, cfgitem->name);
     vals = iniparser_getsecvals(sdict, cfgitem->name);
 
+    /*  
     for (j = 0; j < knum; j++) {
       printf("knum:%d, keys[%d] %s, vals[%d] %s\n", 
           knum, j, keys[j], j, vals[j]);
-    }
+    }*/
 
     cfgitem->keyst = ipv4_cfg_item_init(knum, keys, vals, dcfg);
 
@@ -809,8 +818,8 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
   for (i = 0; i < isize; i++) {
     col = iniparser_getint(ifmt_cfg, keys[i], -1);
     assert(col >= 0);
-    if (max_col < col) {
-      max_col = col;
+    if (max_col < col + 1) {
+      max_col = col + 1;
     }
   }
 
@@ -886,11 +895,35 @@ out:
 }
 
 
+/**
+ * @brief Release config
+ *
+ * @param dcfg [in] config dict
+ * @param cfglist [in] configitem list
+ * @param pp_ikat [in] input log key attribute obj
+ */
 void ipv4_release_cfg(
     dictionary        *dcfg,
     struct list_head  *cfglist, 
-    ilog_kattr_t      *pp_ikat)
+    ilog_kattr_t      *pikat)
 {
+  if (cfglist) {
+    cfg_t *cfg, *n;
+    list_for_each_entry_safe(cfg, n, cfglist, list) {
+      list_del_init(&cfg->list);
+      ipv4_cfg_kst_free(cfg->keyst);
+    }
+  }
+
+  if (pikat) {
+    free(pikat);
+  }
+  
+  if (dcfg) {
+    iniparser_freedict(dcfg);
+    dcfg = NULL;
+  }
+
   return;
 }
 
@@ -917,6 +950,15 @@ char *ipv4_cfg_get_ofile(dictionary *dcfg)
   filename = iniparser_getstring(dcfg, OPATH_CFG, NULL);
 
   return filename;
+}
+
+int ipv4_cfg_get_interval(dictionary *dcfg)
+{
+  int ti;
+
+  ti = iniparser_getint(dcfg, TIME_CFG, 60);
+
+  return ti;
 }
 
 /**
@@ -1004,6 +1046,41 @@ void dump_key_attr_map(void)
 
   ipv4_cfg_aitem_free(acfg_item);
   
+  return;
+}
+
+void dump_kattr(kattr_map_t *kattr)
+{
+  if (!kattr) {
+    return;
+  }
+
+  if (!kattr->kname) {
+    return;
+  }
+  fprintf(stdout, "key:%s, offset:%d, ilen:%d\n", 
+      kattr->kname, kattr->offset, kattr->ilen);
+
+  fprintf(stdout, "olen:%d, pf:%p, soff:%d, slen:%d, up:%p\n", 
+      kattr->olen, kattr->parse_func, 
+      kattr->st_off, kattr->st_len, kattr->upfunc);
+
+  return;
+}
+
+void dump_ilat(ilog_kattr_t *pilat)
+{
+  int i;
+
+  if (!pilat) {
+    return;
+  }
+
+  for (i = 0; i < pilat->num; i++) {
+    printf("Index:%d, total:%d\n", i, pilat->num);
+    dump_kattr(&pilat->kattr[i]);
+  }
+
   return;
 }
 
@@ -1115,6 +1192,8 @@ void dump_config(struct list_head *cfglist)
   if (cfglist ==  NULL) {
     return;
   }
+
+  printf("-------------\n");
   list_for_each_entry(cfg, cfglist, list) {
     dump_kst(cfg->keyst, 0);
     dump_stm(cfg->keyst, 0);

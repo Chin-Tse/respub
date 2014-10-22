@@ -103,3 +103,53 @@ void ipv4_parse_uint64(char *mem, int len, char *val)
   return;
 }
 
+char *ipv4_parse_ip2str(char *mem)
+{
+  static char buf[20];
+
+  sprintf(buf, "%s", inet_ntoa(*(struct in_addr *)mem));
+
+  return buf;
+}
+
+char *ipv4_parse_str2str(char *mem)
+{
+  return mem;
+}
+
+char *ipv4_parse_uint64_str(char *mem)
+{
+  static char buf[24];
+
+  sprintf(buf, "%lu", (*(uint64_t *)mem));
+
+  return buf;
+}
+
+char *ipv4_parse_uint32_str(char *mem)
+{
+  static char buf[24];
+
+  sprintf(buf, "%u", (*(uint32_t *)mem));
+
+  return buf;
+}
+
+char *ipv4_parse_uint16_str(char *mem)
+{
+  static char buf[24];
+
+  sprintf(buf, "%u", (*(uint16_t *)mem));
+
+  return buf;
+}
+
+char *ipv4_parse_uint8_str(char *mem)
+{
+  static char buf[5];
+
+  sprintf(buf, "%u", (*(uint8_t *)mem));
+
+  return buf;
+}
+

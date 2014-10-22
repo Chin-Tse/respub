@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <time.h>
+#include <sys/time.h>
+#include <signal.h>
 
 /*For inet_addr*/
 #include <sys/socket.h>
@@ -31,6 +33,10 @@
 
 #define HASH_SIZE   (100)
 #define OFMT_DEF_LEN (10)
+
+/* Parse func-type define */
+typedef void (*ipv4_parse_f)(char *, int, char*);
+typedef char *(*ipv4_unparse_f)(char *);
 
 /* config type */
 typedef enum {
@@ -77,6 +83,7 @@ typedef struct _keystat_ {
   uint32_t            offset;             /* key offset from loginfo */
   uint32_t            ilen;               /* key len */
   uint32_t            olen;               /* output space */
+  ipv4_unparse_f      upfunc;
   struct hlist_head   hlist[HASH_SIZE];   /* st item hash */
 } key_st_t;
 
@@ -97,8 +104,6 @@ typedef struct _cfgitem_ {
   key_st_t            *keyst;
 } cfg_t;
 
-/* Parse func-type define */
-typedef void (*ipv4_parse_f)(char *, int, char*);
 
 /* key domain */
 typedef struct _kmap_ {
@@ -109,6 +114,7 @@ typedef struct _kmap_ {
     ipv4_parse_f  parse_func;
     uint8_t       st_off;
     uint8_t       st_len;
+    ipv4_unparse_f  upfunc;
 } kattr_map_t;
 
 /* organize key attr in order of col to speed up parse */
@@ -126,6 +132,29 @@ typedef struct _ilog_kattr_ {
  * @return  hash 
  */
 uint32_t ipv4_cfg_hash(char *mem, int len);
+
+/**
+ * @brief Load config file
+ *
+ * @param cfgname [in] Config file path name
+ *
+ * @return  0 -- success, other -- failure  
+ */
+dictionary *ipv4_readcfg(char *cfgname, 
+    struct list_head  *cfglist,
+    ilog_kattr_t      **pp_ikat);
+
+/**
+ * @brief Release config
+ *
+ * @param dcfg [in] config dict
+ * @param cfglist [in] configitem list
+ * @param pp_ikat [in] input log key attribute obj
+ */
+void ipv4_release_cfg(
+    dictionary        *dcfg,
+    struct list_head  *cfglist, 
+    ilog_kattr_t      *pp_ikat);
 
 /**
  * @brief Malloc a new st_item
@@ -184,11 +213,27 @@ void ipv4_cfg_aitem_free(acfg_item_t *acfg_item);
 
 char *ipv4_cfg_get_ifile(dictionary *dcfg);
 char *ipv4_cfg_get_ofile(dictionary *dcfg);
+int ipv4_cfg_get_interval(dictionary *dcfg);
 
 /**
- * @brief dump Key attr map
+ * @brief Displays data as hexadecimal data
+ *
+ * @param buffer [in] The data buffer
+ * @param length [in] the length of data to print
+ * @param cols [in] The number of hexadecimal columns to display
+ * @param group [in] The number of group to dixplay
+ * @param prestr [in] Every row prefix string 
  */
+void hexprint_buf( 
+    char * buffer, 
+    uint32_t  length, 
+    uint32_t  cols, 
+    uint32_t group,
+    char *prestr);
+
 void dump_key_attr_map(void);
+void dump_config(struct list_head *cfglist);
+void dump_ilat(ilog_kattr_t *pilat);
 
 void test_cfg(void);
 

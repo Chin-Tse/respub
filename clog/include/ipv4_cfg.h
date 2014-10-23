@@ -93,7 +93,7 @@ typedef struct _st_item_ {
   struct list_head    kst_list;       /* next key_st */
   key_st_t            *curkst;
   st_t                st;             /* stat info */
-  time_t              tm;             /* the last hit timstamp */
+  uint32_t            tm;             /* the last hit timstamp */
   char                data[0];        /* this item's key value */
 } st_item;
 
@@ -103,7 +103,6 @@ typedef struct _cfgitem_ {
   char                *name;
   key_st_t            *keyst;
 } cfg_t;
-
 
 /* key domain */
 typedef struct _kmap_ {

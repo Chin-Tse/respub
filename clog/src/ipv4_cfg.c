@@ -116,7 +116,7 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
 
   INIT_HLIST_NODE(&stm->hn);
   INIT_LIST_HEAD(&stm->kst_list);
-  stm->tm = time(NULL);
+  stm->tm = 0;
   stm->curkst = kst;
   if (kst->next) {
     /* ref list */
@@ -1090,6 +1090,7 @@ void dump_stm(key_st_t *kst, int prefix)
   char        *prestr;
   int         i;
   st_item     *stm;
+  st_t        *st;
   key_st_t    *kpos, *kn;  
   struct hlist_node *pos, *n;  
 
@@ -1113,8 +1114,15 @@ void dump_stm(key_st_t *kst, int prefix)
     }
 
     hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
-      printf("%sstm:%s, curkst:%p, tm:%lu\n", 
-          prestr, stm->curkst->name, stm->curkst, stm->tm);
+      st = &stm->st;
+      printf("%sstm:%s, curkst:%p, tm:%u, %p\n", 
+          prestr, stm->curkst->name, stm->curkst, stm->tm, stm);
+
+      printf("%srxpkts:%u, txpkts:%u, syn:%u, "
+          "synack:%u, rxb:%lu, txb:%lu\n", 
+          prestr, st->rxpkts, st->txpkts, st->syn, 
+          st->synack, st->rxbytes, st->txbytes);
+
       hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
 
       list_for_each_entry(kpos, &stm->kst_list, list) {

@@ -8,6 +8,7 @@
  * Copyright (c) Chinanetcenter 2014. All rights reserved.
  */
 
+#include "bench.h"
 #include "ipv4_cfg.h"
 #include "ipv4_parse.h"
 #include <pthread.h>
@@ -30,14 +31,35 @@ char *in_fname = NULL;
 char *out_fname = NULL;
 
 /* Timer out tick, never be 0 */
-int             timeout = 1;
+uint32_t        timeout = 1;
 pthread_mutex_t tm_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 /* seconds */
 int             interval = 0;
 
 /* only use in stat thread, don't need to protect */
-int             gtimestamp = 1;
+uint32_t        gtimestamp = 1;
+
+
+/* for performance test */
+static float startTime;
+
+static void start() {
+  startTime = cpu();
+}
+
+static void stop() {
+  float duration = cpu() - startTime;
+  fprintf(stdout, ": \x1b[32m%.4f\x1b[0ms\n", duration);
+}
+
+static void bm(char *label, void (*fn)()) {
+  printf(" %18s", label);
+  fflush(stdout);
+  start();
+  fn();
+  stop();
+}
 
 /**
  * @brief Get a new output fd and mng all cache file
@@ -177,9 +199,11 @@ void ipv4_stat_kst(key_st_t *kst, ilog_t *ilog)
     if (!match) {
       return;
     }
+    match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
     hlist_add_head(&match->hn, &kst->hlist[hash]);
   }
+
   if (match->tm == gtimestamp) {
     match->st.syn += ilog->syn;
     match->st.synack += ilog->synack;
@@ -188,13 +212,13 @@ void ipv4_stat_kst(key_st_t *kst, ilog_t *ilog)
     match->st.txbytes += ilog->txbytes;
     match->st.rxbytes += ilog->rxbytes;
   } else {
+    match->tm = gtimestamp;
     match->st.syn = ilog->syn;
     match->st.synack = ilog->synack;
     match->st.txpkts = ilog->txpkts;
     match->st.rxpkts = ilog->rxpkts;
     match->st.txbytes = ilog->txbytes;
     match->st.rxbytes = ilog->rxbytes;
-    match->tm = gtimestamp;
   }
 
   /* next stat */
@@ -267,6 +291,10 @@ int ipv4_stat_check_aging(st_item *st)
 #define STM_AGING_TIME   60  /* 60s aging time */
   int   ticks;
 
+  /* config stm - never age out */
+  if (st->tm == 0) {
+    return 0;
+  }
   if (gtimestamp > st->tm) {
     ticks = gtimestamp - st->tm  - 1;
     if (ticks * interval > STM_AGING_TIME) {
@@ -324,7 +352,7 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, st_item **pstm, int pnr)
         if (list_empty(&stm->kst_list)) {
           /* log out */
           ipv4_stat_log(pstm, lv);
-          return;
+          continue;
         }
         list_for_each_entry(kpos, &stm->kst_list, list) {
           ipv4_stat_kst_log(kpos, lv + 1, pstm, 100);
@@ -353,9 +381,9 @@ void ipv4_stat_log_out(struct list_head *cfglist)
  *
  * @return  current timestamp  
  */
-int ipv4_stat_get_tm(void)
+uint32_t ipv4_stat_get_tm(void)
 {
-  int tm;
+  uint32_t tm;
   pthread_mutex_lock(&tm_mtx);
   tm = timeout;
   pthread_mutex_unlock(&tm_mtx);
@@ -363,7 +391,7 @@ int ipv4_stat_get_tm(void)
   return tm;
 }
 
-int ipv4_stat_check_timeout(int *otime)
+int ipv4_stat_check_timeout(uint32_t *otime)
 {
   int rv;
 
@@ -391,15 +419,16 @@ int ipv4_stat(
     ilog_kattr_t      *pilat,
     struct list_head  *cfglist)
 {
-	int     len;
-	ilog_t  info;
-  int     oldtime;
-  FILE    *tmp_fd = NULL;
+	int       len;
+	ilog_t    info;
+  uint32_t  oldtime;
+  FILE      *tmp_fd = NULL;
   static  FILE    *log_fd = NULL;
 	static  long total_len;
 	static  char  buf[1024];
 
   log_fd = ipv4_stat_mv_logfile(NULL);
+  start();
 	while (fgets(buf,1024,file) != NULL) {
 		total_len += 1;
 		fprintf(log_fd, "%s", buf);
@@ -420,12 +449,15 @@ int ipv4_stat(
     /* don't get time every line */
 		if(ipv4_stat_check_timeout(&oldtime)) {
       /* output first */
-			ipv4_stat_log_out(cfglist);
+			//ipv4_stat_log_out(cfglist);
       gtimestamp = oldtime;
 		}
 	}
+  stop();
+  printf("total_len:%ld\n", total_len);
 
 	ipv4_stat_log_out(cfglist);
+  dump_config(cfglist);
 
   if (log_fd) {
     fclose(log_fd);

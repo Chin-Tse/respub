@@ -17,7 +17,7 @@ interval = 3
     dport=138
     dstip=172.16.0.255
     
-    #should not be the any key list in 'log-options'
+    #keyword(agrp_qq) should not be any key list in 'log-format'
     agrp_qq = srcip | rxpkts | 1
 
   # diffrent config item should not take a repeated name

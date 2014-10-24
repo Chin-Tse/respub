@@ -1,46 +1,47 @@
 ########## user config region ###########
 [path]
-  #input=/home/see/src/respub/stat/demo4.log
-  input=/home/see/work/src/respub/clog/ipv4.log
-  output=/tmp/log/pkstat
+  #input=/home/see/clog/ipv4.log
+  input=./ipv4_log_2
+  output=./pkstat
+  result=./stat
 
 [time]
-interval = 3
-
-# improve to support multi-value stat in a item latter
-[auto-grp]
-  agrp3=srcip, proto_num| syn | 1
+interval = 60
 
 [spc-grp]
   [[sgrp1]]
     # keyword must be list in 'log-format'
-    dport=138
-    dstip=172.16.0.255
+    #proto_num = 17
+    #dport=!6000
+    dstip=!172.16.0.149
+    action=accept
     
     #keyword(agrp_qq) should not be any key list in 'log-format'
-    agrp_qq = srcip | rxpkts | 1
+    agrp_qq = proto_num, srcip | rxpkts | 1
 
   # diffrent config item should not take a repeated name
   # otherwise it cause fault Error
- 
+
+
 ########## Innercfg:don't change this region ###########
 # this domain define the log file format
 # specify names for cols used by cfgitem latter
 # names should not be changed
+# 192.168.26.93,51889,172.16.0.93,6000,udp,17,em1,recv,10,2220,send,1,250,syn,0,syn+ack,0,code,0,type,0,0
 [log-format]
-  srcip=2
-  sport=3
-  dstip=4
-  dport=5
-  proto_num=7
-  ifname=8
+  srcip=0
+  sport=1
+  dstip=2
+  dport=3
+  proto_num=5
+  ifname=6
 
-  rxpkts=10
-  rxbytes=11
-  txpkts=13
-  txbytes=14
-  syn=16
-  synack=18
+  rxpkts=8
+  rxbytes=9
+  txpkts=11
+  txbytes=12
+  syn=14
+  synack=16
 
 # specify how much space take for each item
 # eg. 'srcip=16' would be used like %16s when output srcip content

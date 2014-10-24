@@ -17,6 +17,7 @@
 #define CFG_FILE    "./config.txt"
 #define IPATH_CFG    "path:input"
 #define OPATH_CFG    "path:output"
+#define RESULT_CFG   "path:result"
 #define TIME_CFG     "time:interval"
 
 #define IFMT_CFG    "log-format"
@@ -370,8 +371,16 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
     }
     /* never aged */
     stm->tm = 0;
+    if (val[0] == '!') {
+      printf("------------no op------\n");
+      kst->opt = 1;
+      stm->opt = 1;
+      val++;
+    }
     kattr->parse_func(stm->data, kst->ilen, val);
     hash = ipv4_cfg_hash(stm->data, kst->ilen);
+    kst->hash = hash;
+    stm->type = KST_SPEC;
     hlist_add_head(&stm->hn, &kst->hlist[hash]);
   }
  
@@ -639,6 +648,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
   dictionary  *ifmt_cfg;
   acfg_item_t *acfg_item = NULL;
   st_item     *stm = NULL;
+  int         action = 0;
 
   /* get sub config, not need to free sub-dict */
   ifmt_cfg = iniparser_str_getsec(dcfg, IFMT_CFG);
@@ -669,11 +679,29 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
       }
       continue;
     } else {
+      if (!strcmp(keys[i], "action")) {
+        if (!strcmp(vals[i], "accept")) {
+          action = 0;
+        } else {
+          action = 1;
+        }
+      }
       acfg_item = ipv4_cfg_aitem_get(keys[i], vals[i]);
       kst = ipv4_cfg_aitem_add(tkst, acfg_item);
       if (!tkst) {
         tkst = kst;
       }
+    }
+  }
+
+  /* update kst action */
+  if (action) {
+    kst = tkst;
+    while (kst) {
+      if (kst->kst_type == KST_SPEC) {
+        kst->action = action;
+      }
+      kst = kst->next;
     }
   }
 
@@ -697,7 +725,9 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
         kst = NULL;
       }
     } else {
-      break;
+      if (strcmp(keys[i], "action")) {
+        break;
+      }
     }
   }
 
@@ -952,6 +982,15 @@ char *ipv4_cfg_get_ofile(dictionary *dcfg)
   return filename;
 }
 
+char *ipv4_cfg_get_rfile(dictionary *dcfg)
+{
+  char *filename;
+
+  filename = iniparser_getstring(dcfg, RESULT_CFG, NULL);
+
+  return filename;
+}
+
 int ipv4_cfg_get_interval(dictionary *dcfg)
 {
   int ti;
@@ -1115,8 +1154,9 @@ void dump_stm(key_st_t *kst, int prefix)
 
     hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
       st = &stm->st;
-      printf("%sstm:%s, curkst:%p, tm:%u, %p\n", 
-          prestr, stm->curkst->name, stm->curkst, stm->tm, stm);
+      printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
+          prestr, stm->curkst->name, stm->curkst, 
+          stm->tm, stm->opt, stm->type, stm);
 
       printf("%srxpkts:%u, txpkts:%u, syn:%u, "
           "synack:%u, rxb:%lu, txb:%lu\n", 
@@ -1161,9 +1201,10 @@ void dump_kst(key_st_t *kst, int prefix)
   memset(prestr, ' ', prelen);
   prestr[prelen - 1] = '\0';
 
-  printf("%sname:%s, %p\n", prestr, kst->name, (void*)kst);
-  printf("%soffset:%u, ilen:%u, olen:%u\n", 
-      prestr, kst->offset, kst->ilen, kst->olen);
+  printf("%sname:%s, opt:%u,act:%d, %p\n", 
+      prestr, kst->name, kst->opt, kst->action, (void*)kst);
+  printf("%shs:%u, offset:%u, ilen:%u, olen:%u\n", 
+      prestr, kst->hash, kst->offset, kst->ilen, kst->olen);
 
   /* only free in top kst */
   if (kst->cond) {
@@ -1206,6 +1247,7 @@ void dump_config(struct list_head *cfglist)
     dump_kst(cfg->keyst, 0);
     dump_stm(cfg->keyst, 0);
   }
+  printf("-------------\n");
 
   return;
 }

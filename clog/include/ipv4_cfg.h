@@ -78,12 +78,15 @@ typedef struct _keystat_ {
   struct list_head    list;
   cond_t              *cond;              /* config st col & threshold */
   kst_type_t          kst_type;           /*  */
+  uint32_t            opt;                /*  */
+  int                 action;
   char                *name;              /* key name */
   struct _keystat_    *next;              /* next key */
   uint32_t            offset;             /* key offset from loginfo */
   uint32_t            ilen;               /* key len */
   uint32_t            olen;               /* output space */
   ipv4_unparse_f      upfunc;
+  uint32_t            hash;               /* output space */
   struct hlist_head   hlist[HASH_SIZE];   /* st item hash */
 } key_st_t;
 
@@ -93,7 +96,9 @@ typedef struct _st_item_ {
   struct list_head    kst_list;       /* next key_st */
   key_st_t            *curkst;
   st_t                st;             /* stat info */
+  uint32_t            opt;
   uint32_t            tm;             /* the last hit timstamp */
+  uint32_t            type;             /* the last hit timstamp */
   char                data[0];        /* this item's key value */
 } st_item;
 
@@ -212,6 +217,7 @@ void ipv4_cfg_aitem_free(acfg_item_t *acfg_item);
 
 char *ipv4_cfg_get_ifile(dictionary *dcfg);
 char *ipv4_cfg_get_ofile(dictionary *dcfg);
+char *ipv4_cfg_get_rfile(dictionary *dcfg);
 int ipv4_cfg_get_interval(dictionary *dcfg);
 
 /**

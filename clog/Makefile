@@ -11,7 +11,7 @@ SRCDIR  = src
 INCDIR	=./include
 CFLAGS  += -g -I$(INCDIR) 
 
-LIBSRC 	= list iniparser astr
+LIBSRC 	= iniparser astr
 LIBPRE	:= $(TOPDIR)
 LIBDIR 	:= $(LIBPRE)/lib
 CMLIBS 		= $(patsubst %, $(LIBDIR)/lib%.a, $(LIBSRC))
@@ -19,7 +19,7 @@ CLN_LIBS= $(addprefix _clean_, $(LIBSRC))
 
 LDFLAGS += -L$(LIBDIR)
 LDFLAGS += $(patsubst %, -l%, $(LIBSRC))
-LDFLAGS	+= -lpthread
+LDFLAGS	+= -lpthread -lrt
 
 SOURCE  := $(wildcard $(TOPDIR)/$(SRCDIR)/*.c)
 OBJDIR 	:= obj

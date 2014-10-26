@@ -1,7 +1,7 @@
 ########## user config region ###########
 [path]
   #input=/home/see/clog/ipv4.log
-  input=./ipv4_log_2
+  input=./ipv4_log_0
   output=./pkstat
   result=./stat
 

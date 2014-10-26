@@ -132,7 +132,7 @@ FILE *ipv4_stat_mv_logfile(FILE *log_fd)
  *
  * @return  0 -- success, other -- failure  
  */
-int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
+static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
 {
   int         index;
   char        *pch;
@@ -364,60 +364,73 @@ static inline int ipv4_stat_stm_chkcond(st_item *stm, cond_t *cond)
   return 0;
 }
 
-#define KEY_OFFSET(key)  offsetof(ilog_t, key)
-#define KEY_ILEN(key)    sizeof(((ilog_t*)0)->key)
+int  logtstmp = 0;
+
+static inline void ipv4_stat_set_logtstmp()
+{
+  logtstmp = 1;
+}
+
+static inline int ipv4_stat_get_logtstmp(char *pbuf)
+{
+  time_t curtm;
+  int     len;
+  char    *tstr;
+
+  len = 0;
+  if (logtstmp) {
+    curtm = time(NULL);
+    tstr = ctime(&curtm);
+    len = strlen(tstr);
+    strcpy(pbuf, tstr);
+    logtstmp = 0;
+  }
+
+  return len;
+}
 
 void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
   int       i;
   key_st_t  *kst;
-  char      buf[1024];
   char      *pbuf;
   st_t      *st;
   ipv4_unparse_f func;
+  static char buf[1024];
   
   buf[0] = '\0';
   pbuf = buf;
 
+  pbuf += ipv4_stat_get_logtstmp(pbuf);
 
-  for (i = 0; i <= lv; i++) {
-    /* has already output */
-    kst = pstm[i].stm->curkst;
-    sprintf(pbuf, "%s:", kst->name);
-    if (!kst->upfunc) {
-      func = ipv4_parse_uint32_str;
-    } else {
-      func = kst->upfunc;
-    }
-    /* format ... */
-    strcat(pbuf, func(pstm[i].stm->data));
-    pbuf += strlen(pbuf);
-    pbuf[0] = ',';
-    pbuf++;
-  }
-
-#if 0
   for (i = 0; i <= lv; i++) {
     /* has already output */
     if (pstm[i].out) {
       memset(pbuf, ' ', i << 1);
       pbuf += i << 1;
       continue;
-    }
-    pstm[i].out = 1;
-    kst = pstm[i].stm->curkst;
-    sprintf(pbuf, "%s:", kst->name);
-    if (!kst->upfunc) {
-      func = ipv4_parse_uint32_str;
     } else {
-      func = kst->upfunc;
+      memset(pbuf, ' ', i << 1);
+      pbuf += i << 1;
+
+      pstm[i].out = 1;
+      kst = pstm[i].stm->curkst;
+      sprintf(pbuf, "%s:", kst->name);
+      if (!kst->upfunc) {
+        func = ipv4_parse_uint32_str;
+      } else {
+        func = kst->upfunc;
+      }
+      /* format ... */
+      strcat(pbuf, func(pstm[i].stm->data));
+      pbuf += strlen(pbuf);
+      pbuf[0] = '\n';
+      pbuf++;
     }
-    /* format ... */
-    strcat(pbuf, func(pstm[i].stm->data));
-    pbuf += strlen(pbuf);
-    pbuf[0] = ',';
-    pbuf++;
   }
-#endif
+
+  pbuf--;
+  pbuf[0] = ',';
+  pbuf++;
 
   st = &pstm[lv].stm->st;
 
@@ -501,6 +514,7 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
         pstm[lv].stm = stm;
         if (list_empty(&stm->kst_list)) {
           /* log out */
+          pstm[lv].out = 0;
           ipv4_stat_log(pstm, lv);
           continue;
         }
@@ -520,6 +534,7 @@ void ipv4_stat_log_out(struct list_head *cfglist)
   cfg_t             *cfg;
   static rlog_ctl_t pstm[100];
   
+  ipv4_stat_set_logtstmp();
   list_for_each_entry(cfg, cfglist, list) {
     ipv4_stat_kst_log(cfg->keyst, 0, pstm, 100);
   }
@@ -557,7 +572,7 @@ int ipv4_stat_check_timeout(uint32_t *otime)
 }
 
 /**
- * @brief Stat pkts
+ * @brief Stat pkt
  *
  * @param file [in] input logfile
  * @param pilat [in] key parse attribute
@@ -661,8 +676,11 @@ int ipv4_stat_create_dir(char *ofname)
   dir = strdup(ofname);
   len = strlen(dir);
   
-  while (dir[len] != '/') {
+  while (dir[len] != '/' ) {
     len--;
+    if (len < 0) {
+      return 0;
+    }
   }
   dir[len] = '\0';
 

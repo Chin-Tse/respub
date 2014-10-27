@@ -33,17 +33,17 @@
 /* domain cfg arry */
 kattr_map_t key_attr_map[] = {
   {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip,
-  0,0, ipv4_parse_ip2str},
+  0,0, ipv4_parse_ip2str, 1000},
   {"dstip", KEY_OFFSET(dstip), KEY_ILEN(dstip), DEF_OLEN, ipv4_parse_ip,
-  0,0, ipv4_parse_ip2str},
+  0,0, ipv4_parse_ip2str, 100},
   {"sport", KEY_OFFSET(sport), KEY_ILEN(sport), DEF_OLEN, ipv4_parse_uint16, 
-  0,0, ipv4_parse_uint16_str},
+  0,0, ipv4_parse_uint16_str, HASH_SIZE},
   {"dport", KEY_OFFSET(dport), KEY_ILEN(dport), DEF_OLEN, ipv4_parse_uint16,
-  0,0, ipv4_parse_uint16_str},
+  0,0, ipv4_parse_uint16_str, HASH_SIZE},
   {"proto_num", KEY_OFFSET(proto_num), KEY_ILEN(proto_num), DEF_OLEN, ipv4_parse_uint8,
-  0,0, ipv4_parse_uint8_str},
+  0,0, ipv4_parse_uint8_str, 20},
   {"ifname", KEY_OFFSET(ifname), KEY_ILEN(ifname), DEF_OLEN, ipv4_parse_str,
-  0,0,ipv4_parse_str2str},
+  0,0,ipv4_parse_str2str, 10},
 
   {"syn", KEY_OFFSET(syn), KEY_ILEN(syn), DEF_OLEN, ipv4_parse_uint32, 
     ST_OFFSET(syn), ST_ILEN(syn)},
@@ -77,7 +77,7 @@ kattr_map_t *ipv4_cfg_kattr_get(const char *key);
  *
  * @return  hash 
  */
-uint32_t ipv4_cfg_hash(char *mem, int len)
+uint32_t ipv4_cfg_hash(char *mem, int len, uint32_t size)
 {
   uint32_t    hash ;
   size_t      i ;
@@ -92,7 +92,7 @@ uint32_t ipv4_cfg_hash(char *mem, int len)
   hash ^= (hash >>11);
   hash += (hash <<15);
 
-  hash %= HASH_SIZE;
+  hash %= size;
 
   return hash ;
 }
@@ -177,14 +177,14 @@ key_st_t *ipv4_cfg_kst_ref(key_st_t *kst)
     return NULL;
   }
 
-  nkst = malloc(sizeof(key_st_t));
+  nkst = malloc(sizeof(key_st_t) + sizeof(struct hlist_head) * kst->size);
   if (!nkst) {
     return NULL;
   }
   /* copy Pointer: next/cond/name, and other attr */
-  memcpy(nkst, kst, sizeof(key_st_t) - sizeof(struct hlist_head) * HASH_SIZE);
+  memcpy(nkst, kst, sizeof(key_st_t));
   INIT_LIST_HEAD(&nkst->list);
-  memset(nkst->hlist, 0, sizeof(struct hlist_head) * HASH_SIZE);
+  memset(nkst->hlist, 0, sizeof(struct hlist_head) * kst->size);
 
   return nkst;
 }
@@ -209,7 +209,7 @@ void ipv4_cfg_kst_release(key_st_t *kst)
   /* remote from list */
   list_del(&kst->list);
   /* delete stm */
-  for (i = 0; i < HASH_SIZE; i++) {
+  for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }
@@ -231,17 +231,29 @@ void ipv4_cfg_kst_release(key_st_t *kst)
  *
  * Mostly called when generate new config
  */
-key_st_t *ipv4_cfg_kst_malloc(void)
+key_st_t *ipv4_cfg_kst_malloc(char *key)
 {
   int       i;
   key_st_t  *kst;
-  
-  kst = calloc(1, sizeof(key_st_t));
+  kattr_map_t *kattr;
+ 
+  kattr = ipv4_cfg_kattr_get(key);
+  if (!kattr) {
+    fprintf(stderr, "Error config, Key error:%s!\n", key);
+    return NULL;
+  } 
+
+  if (kattr->size == 0) {
+    kattr->size = HASH_SIZE;
+  }
+
+  kst = calloc(1, sizeof(key_st_t) + sizeof(struct hlist_head) * kattr->size);
   if (!kst) {
     return kst;
   }
+  kst->size = kattr->size;
   INIT_LIST_HEAD(&kst->list);
-  for (i = 0; i < HASH_SIZE; i++) {
+  for (i = 0; i < kattr->size; i++) {
     INIT_HLIST_HEAD(&kst->hlist[i]);
   }
 
@@ -295,7 +307,7 @@ void ipv4_cfg_kst_free(key_st_t *kst)
   }
 
   /* delete stm */
-  for (i = 0; i < HASH_SIZE; i++) {
+  for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }
@@ -378,7 +390,7 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
       val++;
     }
     kattr->parse_func(stm->data, kst->ilen, val);
-    hash = ipv4_cfg_hash(stm->data, kst->ilen);
+    hash = ipv4_cfg_hash(stm->data, kst->ilen, kst->size);
     kst->hash = hash;
     stm->type = KST_SPEC;
     hlist_add_head(&stm->hn, &kst->hlist[hash]);
@@ -560,7 +572,7 @@ key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
 
   /* Generate KST for each agp key */
   for (j = 0; j < acfg_item->nk; j++) {
-    kst = ipv4_cfg_kst_malloc();
+    kst = ipv4_cfg_kst_malloc(acfg_item->keys[j]);
     if (!kst) {
       goto err;
     }
@@ -660,7 +672,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
   okst = NULL;
   for (i = 0; i < num; i++) {
     if (iniparser_find_entry(ifmt_cfg, keys[i])) {
-      kst = ipv4_cfg_kst_malloc();
+      kst = ipv4_cfg_kst_malloc(keys[i]);
       if (!kst) {
         goto err;
       }
@@ -1100,6 +1112,8 @@ void dump_kattr(kattr_map_t *kattr)
   fprintf(stdout, "key:%s, offset:%d, ilen:%d\n", 
       kattr->kname, kattr->offset, kattr->ilen);
 
+  fprintf(stdout, "size:%u, upfunc:%p\n", kattr->size, kattr->upfunc);
+
   fprintf(stdout, "olen:%d, pf:%p, soff:%d, slen:%d, up:%p\n", 
       kattr->olen, kattr->parse_func, 
       kattr->st_off, kattr->st_len, kattr->upfunc);
@@ -1147,7 +1161,7 @@ void dump_stm(key_st_t *kst, int prefix)
   prestr[prelen - 1] = '\0';
 
   /* dump stm */
-  for (i = 0; i < HASH_SIZE; i++) {
+  for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }

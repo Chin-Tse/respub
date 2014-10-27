@@ -87,7 +87,8 @@ typedef struct _keystat_ {
   uint32_t            olen;               /* output space */
   ipv4_unparse_f      upfunc;
   uint32_t            hash;               /* output space */
-  struct hlist_head   hlist[HASH_SIZE];   /* st item hash */
+  uint32_t            size;
+  struct hlist_head   hlist[0];   /* st item hash */
 } key_st_t;
 
 /* common stat item */
@@ -119,6 +120,7 @@ typedef struct _kmap_ {
     uint8_t       st_off;
     uint8_t       st_len;
     ipv4_unparse_f  upfunc;
+    uint32_t      size;
 } kattr_map_t;
 
 /* organize key attr in order of col to speed up parse */
@@ -135,7 +137,7 @@ typedef struct _ilog_kattr_ {
  *
  * @return  hash 
  */
-uint32_t ipv4_cfg_hash(char *mem, int len);
+uint32_t ipv4_cfg_hash(char *mem, int len, uint32_t size);
 
 /**
  * @brief Load config file

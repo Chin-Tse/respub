@@ -185,7 +185,7 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
   }
 
   kmem = (char *)ilog + kst->offset;
-  hash = ipv4_cfg_hash(kmem, kst->ilen);
+  hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
 
   hlist_for_each_entry(stm, hpos, &kst->hlist[hash], hn) {
     if (!memcmp(stm->data, kmem, kst->ilen)) {
@@ -265,7 +265,7 @@ void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
   struct hlist_node *hpos;
   
   kmem = (char *)ilog + kst->offset;
-  hash = ipv4_cfg_hash(kmem, kst->ilen);
+  hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
 
   if (kst->hash) {
     if (hash != kst->hash && kst->opt == 0) {
@@ -484,7 +484,7 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
     return;
   }
 
-  for (i = 0; i < HASH_SIZE; i++) {
+  for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }
@@ -624,7 +624,7 @@ int ipv4_stat(
 
 	ipv4_stat_log_out(cfglist);
   printf("------cfg:------\n");
-  dump_config(cfglist);
+  //dump_config(cfglist);
 
 
   if (log_fd) {
@@ -701,7 +701,7 @@ int main(int argc,char* argv[])
   }
 
   dump_config(&cfg_list);
-  //dump_ilat(gpilat);
+  dump_ilat(gpilat);
 
   /* Get input file name */
   in_fname = ipv4_cfg_get_ifile(gdcfg);

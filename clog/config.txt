@@ -12,9 +12,9 @@ interval = 60
   [[sgrp1]]
     # keyword must be list in 'log-format'
     #proto_num = 17
-    #dport=!6000
-    #dstip=!172.16.0.149
-    #action=accept
+    dport=80
+    dstip=172.16.0.149/24
+    action=drop
     
     #keyword(agrp_qq) should not be any key list in 'log-format'
     agrp_qq = proto_num, dport, srcip, sport | rxpkts | 1

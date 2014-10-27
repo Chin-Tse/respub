@@ -152,7 +152,6 @@ static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
       pch = strtok(NULL, ",");
       continue;
     }
-    //printf("%d, %s---%s\n", index, kattr->kname, pch);
 
     val = (char *)ilog + kattr->offset;
     if (pch) {
@@ -162,6 +161,7 @@ static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
       fprintf(stderr, "No complete log!\n");
       return -1;
     }
+    //printf("%d, %s---%s-%x\n", index, kattr->kname, pch, *(uint32_t *)val);
     index++;
     pch = strtok(NULL, ",");
   }
@@ -172,20 +172,42 @@ static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
 void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 {
   int       rv = 1;
+  int       cmp = 1;
   st_item   *stm;
   st_item   *match = NULL;
   char      *kmem;
   key_st_t  *kpos, *kn;
   uint32_t  hash;
-  
+  uint32_t  tmp;
   struct hlist_node *hpos;
-
-  if (!kst) {
-    return;
-  }
 
   kmem = (char *)ilog + kst->offset;
   hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
+
+  if (kst->mask) {
+    tmp = *(uint32_t *)kmem & kst->mask;
+    assert(kst->cfgstm);
+    cmp = memcmp(kst->cfgstm->data, &tmp, kst->ilen);
+    if (cmp) {
+      rv = kst->opt;
+    } else {
+      rv = !kst->opt;
+    }
+  } else {
+    if (kst->cfgstm) {
+      cmp = memcmp(kst->cfgstm->data, kmem, kst->ilen);
+      if (cmp) {
+        rv = kst->opt;
+      } else {
+        match = kst->cfgstm;
+        rv = !kst->opt;
+        goto out;
+      }
+    } else {
+      // should not run here
+      printf("Error...\n");
+    }
+  }
 
   hlist_for_each_entry(stm, hpos, &kst->hlist[hash], hn) {
     if (!memcmp(stm->data, kmem, kst->ilen)) {
@@ -194,17 +216,7 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
     } 
   }
 
-  if (match) {
-    if (match->type == KST_SPEC) {
-      /* match & !=  ---> no filter */
-      if (kst->opt) {
-        rv = 0;
-        goto out;
-      } else {
-        rv = 1;
-      }
-    }
-  } else {
+  if (!match) {
     /* = */
     match = ipv4_cfg_stm_malloc(kst);
     if (!match) {
@@ -213,11 +225,6 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
     match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
     hlist_add_head(&match->hn, &kst->hlist[hash]);
-
-    /* No match & == ---> no filter */
-    if (!kst->opt) {
-      rv = 1 ;
-    }
   }
   
 out:
@@ -246,6 +253,7 @@ out:
     } else {
       //printf("f:%p data:%d, rv:%d\n", match, *(uint16_t *)match->data, rv);
       if (kpos->action) {
+        assert(kpos->cfgstm);
         ipv4_stat_kst_filter(kpos, ilog);
       }
     }
@@ -255,36 +263,53 @@ out:
 }
 
 void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
-  int       rv;
+  int       rv, cmp;
   st_item   *stm;
   st_item   *match = NULL;
   char      *kmem;
   key_st_t  *kpos, *kn;
   uint32_t  hash;
+  uint32_t  tmp;
   
   struct hlist_node *hpos;
   
+  //printf("---kst:%p, %p---\n", kst, kst->cfgstm);
   kmem = (char *)ilog + kst->offset;
-  hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
+  if (kst->cfgstm) {
+    if (kst->mask) {
+      tmp = *(uint32_t *)kmem & kst->mask;
+      cmp = memcmp(kst->cfgstm->data, &tmp, kst->ilen);
+    } else {
+      cmp = memcmp(kst->cfgstm->data, kmem, kst->ilen);
+      if (!cmp) {
+        match = kst->cfgstm;
+      }
+    }
 
-  if (kst->hash) {
-    if (hash != kst->hash && kst->opt == 0) {
-      return;
+    if (cmp) {
+      if (kst->opt == 0 && kst->action == 0) {
+        return;
+      } 
+    } else {
+      if (kst->opt && kst->action == 0) {
+        return;
+      }
+    }
+
+    if (match) {
+      goto mch;
     }
   }
 
+  hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
   hlist_for_each_entry(stm, hpos, &kst->hlist[hash], hn) {
     if (!memcmp(stm->data, kmem, kst->ilen)) {
-        match = stm;
-        break;
-    } 
+      match = stm;
+      break;
+    }
   }
   
   if (!match) {
-    if (kst->kst_type == KST_SPEC && kst->opt == 0) {
-      return;
-    }
-
     match = ipv4_cfg_stm_malloc(kst);
     if (!match) {
       return;
@@ -292,14 +317,9 @@ void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
     match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
     hlist_add_head(&match->hn, &kst->hlist[hash]);
-  } else {
-    if (kst->opt) {
-      if (match->type == KST_SPEC) {
-        return;
-      }
-    }
-  }
+  } 
 
+mch:
   if (match->tm == gtimestamp) {
     match->st.syn += ilog->syn;
     match->st.synack += ilog->synack;
@@ -395,7 +415,7 @@ void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
   char      *pbuf;
   st_t      *st;
   ipv4_unparse_f func;
-  static char buf[1024];
+  char buf[1024];
   
   buf[0] = '\0';
   pbuf = buf;
@@ -405,8 +425,6 @@ void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
   for (i = 0; i <= lv; i++) {
     /* has already output */
     if (pstm[i].out) {
-      memset(pbuf, ' ', i << 1);
-      pbuf += i << 1;
       continue;
     } else {
       memset(pbuf, ' ', i << 1);
@@ -701,7 +719,7 @@ int main(int argc,char* argv[])
   }
 
   dump_config(&cfg_list);
-  dump_ilat(gpilat);
+  //dump_ilat(gpilat);
 
   /* Get input file name */
   in_fname = ipv4_cfg_get_ifile(gdcfg);

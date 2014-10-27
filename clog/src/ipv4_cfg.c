@@ -97,6 +97,19 @@ uint32_t ipv4_cfg_hash(char *mem, int len, uint32_t size)
   return hash ;
 }
 
+int ipv4_cfg_chk_nmsk(char *key)
+{
+  kattr_map_t *kattr;
+
+  kattr = ipv4_cfg_kattr_get(key);
+  if (!kattr) {
+    fprintf(stderr, "Error config, Key error:%s!\n", key);
+    return 1;
+  }
+
+  return kattr->ilen != 4;
+}
+
 /**
  * @brief Malloc a new st_item
  *
@@ -362,6 +375,8 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
   kattr_map_t *kattr;
   uint32_t    hash;
   st_item     *stm;
+  int         msk;
+  char        *psmsk;
 
   if (kst == NULL || key == NULL || val == NULL) {
     return NULL;
@@ -384,14 +399,34 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
     /* never aged */
     stm->tm = 0;
     if (val[0] == '!') {
-      printf("------------no op------\n");
       kst->opt = 1;
       stm->opt = 1;
       val++;
     }
+
+    psmsk = strchr(val, '/');
+    if (psmsk) {
+      psmsk[0] = '\0';
+      if (ipv4_cfg_chk_nmsk(key)) {
+        kst->mask = 0;
+      } else {
+        msk = (int)strtol(psmsk+1, NULL, 0);
+        if (msk >= 32) {
+          kst->mask = 0;
+        } else {
+          //kst->mask =  ~((1 << ((kst->ilen << 3)- msk)) - 1);
+          kst->mask =  ((1 << msk) - 1);
+          printf("=3=%s, %s, %d,0x%08x\n", psmsk, val, msk, kst->mask);
+        }
+      }
+    }
+
     kattr->parse_func(stm->data, kst->ilen, val);
+    if (kst->mask) {
+      *(uint32_t *)stm->data = *(uint32_t *)stm->data & kst->mask; 
+    }
     hash = ipv4_cfg_hash(stm->data, kst->ilen, kst->size);
-    kst->hash = hash;
+    kst->cfgstm = stm;
     stm->type = KST_SPEC;
     hlist_add_head(&stm->hn, &kst->hlist[hash]);
   }
@@ -660,7 +695,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
   dictionary  *ifmt_cfg;
   acfg_item_t *acfg_item = NULL;
   st_item     *stm = NULL;
-  int         action = 0;
+  uint32_t    action = 0;
 
   /* get sub config, not need to free sub-dict */
   ifmt_cfg = iniparser_str_getsec(dcfg, IFMT_CFG);
@@ -1217,8 +1252,8 @@ void dump_kst(key_st_t *kst, int prefix)
 
   printf("%sname:%s, opt:%u,act:%d, %p\n", 
       prestr, kst->name, kst->opt, kst->action, (void*)kst);
-  printf("%shs:%u, offset:%u, ilen:%u, olen:%u\n", 
-      prestr, kst->hash, kst->offset, kst->ilen, kst->olen);
+  printf("%soffset:%u, ilen:%u, olen:%u, mask:%x, cfgstm:%p\n", 
+      prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
 
   /* only free in top kst */
   if (kst->cond) {

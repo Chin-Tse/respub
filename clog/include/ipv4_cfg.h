@@ -73,20 +73,23 @@ typedef struct _stat_info_ {
 	uint64_t rxbytes;
 } st_t;
 
+typedef struct _st_item_ st_item;
+
 /* key stat */
 typedef struct _keystat_ {
   struct list_head    list;
   cond_t              *cond;              /* config st col & threshold */
   kst_type_t          kst_type;           /*  */
   uint32_t            opt;                /*  */
-  int                 action;
+  uint32_t            action;
   char                *name;              /* key name */
   struct _keystat_    *next;              /* next key */
   uint32_t            offset;             /* key offset from loginfo */
   uint32_t            ilen;               /* key len */
+  uint32_t            mask;               /* imask */
   uint32_t            olen;               /* output space */
   ipv4_unparse_f      upfunc;
-  uint32_t            hash;               /* output space */
+  st_item             *cfgstm;            /* output space */
   uint32_t            size;
   struct hlist_head   hlist[0];   /* st item hash */
 } key_st_t;
@@ -238,6 +241,7 @@ void hexprint_buf(
     uint32_t group,
     char *prestr);
 
+void dump_stm(key_st_t *kst, int prefix);
 void dump_key_attr_map(void);
 void dump_config(struct list_head *cfglist);
 void dump_ilat(ilog_kattr_t *pilat);

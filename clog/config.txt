@@ -3,7 +3,7 @@
   #input=/home/see/clog/ipv4.log
   input=./ipv4_log_0
   output=./pkstat
-  result=./stat
+  result=./stat0
 
 [time]
 interval = 60
@@ -13,11 +13,11 @@ interval = 60
     # keyword must be list in 'log-format'
     #proto_num = 17
     #dport=!6000
-    dstip=!172.16.0.149
-    action=accept
+    #dstip=!172.16.0.149
+    #action=accept
     
     #keyword(agrp_qq) should not be any key list in 'log-format'
-    agrp_qq = proto_num, srcip | rxpkts | 1
+    agrp_qq = proto_num, dport, srcip, sport | rxpkts | 1
 
   # diffrent config item should not take a repeated name
   # otherwise it cause fault Error

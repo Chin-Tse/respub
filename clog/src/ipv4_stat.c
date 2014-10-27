@@ -193,6 +193,9 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
     } else {
       rv = !kst->opt;
     }
+    if (kst->next && kst->next->action == 0 && rv) {
+      return;
+    }
   } else {
     if (kst->cfgstm) {
       cmp = memcmp(kst->cfgstm->data, kmem, kst->ilen);
@@ -201,6 +204,11 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
       } else {
         match = kst->cfgstm;
         rv = !kst->opt;
+      }
+      if (kst->next && kst->next->action == 0 && rv) {
+        return;
+      }
+      if (match) {
         goto out;
       }
     } else {
@@ -642,7 +650,7 @@ int ipv4_stat(
 
 	ipv4_stat_log_out(cfglist);
   printf("------cfg:------\n");
-  //dump_config(cfglist);
+  dump_config(cfglist);
 
 
   if (log_fd) {

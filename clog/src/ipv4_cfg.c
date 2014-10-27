@@ -1195,6 +1195,11 @@ void dump_stm(key_st_t *kst, int prefix)
   memset(prestr, ' ', prelen - 1);
   prestr[prelen - 1] = '\0';
 
+  printf("%s--name:%s, opt:%u,act:%d, %p\n", 
+      prestr, kst->name, kst->opt, kst->action, (void*)kst);
+  printf("%soffset:%u, ilen:%u, olen:%u, mask:%x, cfgstm:%p\n", 
+      prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
+
   /* dump stm */
   for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
@@ -1293,7 +1298,7 @@ void dump_config(struct list_head *cfglist)
 
   printf("-------------\n");
   list_for_each_entry(cfg, cfglist, list) {
-    dump_kst(cfg->keyst, 0);
+    //dump_kst(cfg->keyst, 0);
     dump_stm(cfg->keyst, 0);
   }
   printf("-------------\n");

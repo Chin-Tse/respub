@@ -33,7 +33,7 @@
 /* domain cfg arry */
 kattr_map_t key_attr_map[] = {
   {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip,
-  0,0, ipv4_parse_ip2str, 1000},
+  0,0, ipv4_parse_ip2str, 10000},
   {"dstip", KEY_OFFSET(dstip), KEY_ILEN(dstip), DEF_OLEN, ipv4_parse_ip,
   0,0, ipv4_parse_ip2str, 100},
   {"sport", KEY_OFFSET(sport), KEY_ILEN(sport), DEF_OLEN, ipv4_parse_uint16, 

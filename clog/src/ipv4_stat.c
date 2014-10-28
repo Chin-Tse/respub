@@ -401,16 +401,19 @@ static inline void ipv4_stat_set_logtstmp()
 
 static inline int ipv4_stat_get_logtstmp(char *pbuf)
 {
-  time_t curtm;
-  int     len;
-  char    *tstr;
+  int         len;
+  time_t      curtm;
+  struct tm   *timeinfo;
+  char        buffer [80];
 
   len = 0;
   if (logtstmp) {
     curtm = time(NULL);
-    tstr = ctime(&curtm);
-    len = strlen(tstr);
-    strcpy(pbuf, tstr);
+    timeinfo = localtime ( &curtm);
+    strftime (buffer,80,"%Y-%m-%d-%H:%M\n",timeinfo);
+
+    len = strlen(buffer);
+    strcpy(pbuf, buffer);
     logtstmp = 0;
   }
 
@@ -619,11 +622,19 @@ int ipv4_stat(
 	static  long total_len;
 	static  char  buf[1024];
 
+  static  time_t rawtime;
+  static  struct tm * timeinfo;
+  static  char buffer [80];
+
+  time ( &rawtime );
+  timeinfo = localtime ( &rawtime );
+  strftime (buffer,80,"%Y-%m-%d-%H:%M,",timeinfo);
+
   log_fd = ipv4_stat_mv_logfile(NULL);
   start();
 	while (fgets(buf,1024,file) != NULL) {
 		total_len += 1;
-		fprintf(log_fd, "%s", buf);
+		fprintf(log_fd, "%s%s", buffer, buf);
 		if(total_len >= MAX_LOG_FILE_SIZE) {
 			tmp_fd = ipv4_stat_mv_logfile(log_fd);
 			if (tmp_fd) {
@@ -643,7 +654,10 @@ int ipv4_stat(
       /* output first */
 			ipv4_stat_log_out(cfglist);
       gtimestamp = oldtime;
-		}
+      time ( &rawtime );
+      timeinfo = localtime ( &rawtime );
+      strftime (buffer,80,"%Y-%M-%d-%h:%m",timeinfo);
+    }
 	}
   stop();
   printf("total_len:%ld\n", total_len);

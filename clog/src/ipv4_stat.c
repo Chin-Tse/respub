@@ -277,7 +277,12 @@ void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
     }
     match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
-    hlist_add_head(&match->hn, &kst->hlist[hash]);
+    if (!hlist_empty(&kst->hlist[hash])) {
+      hlist_add_after(kst->hlist[hash].first, &match->hn);
+    } else {
+      hlist_add_head(&match->hn, &kst->hlist[hash]);
+      list_add_tail(&match->olist, &kst->olist);
+    }
   } 
 
 mch:
@@ -484,10 +489,12 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
       if (stm->tm != gtimestamp) {
         /* check for aged out */
         if (ipv4_stat_check_aging(stm)) {
-          ipv4_cfg_stm_free(stm);
+          ipv4_cfg_stm_free(stm, 1);
         }
         continue;
       }
+
+      /*
       if (!kst->cond) {
         continue;
       }
@@ -500,7 +507,9 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
           }
         }
       }
+      */
       
+      rv = 1;
       if (rv) {
         pstm[lv].stm = stm;
         if (list_empty(&stm->kst_list)) {
@@ -509,6 +518,7 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
           ipv4_stat_log(pstm, lv);
           continue;
         }
+
         list_for_each_entry(kpos, &stm->kst_list, list) {
           ipv4_stat_kst_log(kpos, lv + 1, pstm, 100);
           pstm[lv].out = 0;

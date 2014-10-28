@@ -91,6 +91,7 @@ typedef struct _keystat_ {
   ipv4_unparse_f      upfunc;
   st_item             *cfgstm;            /* output space */
   uint32_t            size;
+  struct list_head    olist;
   struct hlist_head   hlist[0];   /* st item hash */
 } key_st_t;
 
@@ -98,6 +99,7 @@ typedef struct _keystat_ {
 struct _st_item_ {
   struct hlist_node   hn; 
   struct list_head    kst_list;       /* next key_st */
+  struct list_head    olist;       /* next key_st */
   key_st_t            *curkst;
   st_t                st;             /* stat info */
   uint32_t            opt;
@@ -179,7 +181,7 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst);
  *
  * @param stm [in] Pointer to stm 
  */
-void ipv4_cfg_stm_free(st_item *stm);
+void ipv4_cfg_stm_free(st_item *stm, int olist);
 
 /**
  * @brief Malloc a new st_item

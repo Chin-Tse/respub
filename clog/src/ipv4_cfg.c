@@ -130,6 +130,7 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
 
   INIT_HLIST_NODE(&stm->hn);
   INIT_LIST_HEAD(&stm->kst_list);
+  INIT_LIST_HEAD(&stm->olist);
   stm->tm = 0;
   stm->curkst = kst;
   if (kst->next) {
@@ -153,14 +154,26 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
  *
  * @param stm [in] Pointer to stm 
  */
-void ipv4_cfg_stm_free(st_item *stm)
+void ipv4_cfg_stm_free(st_item *stm, int olist)
 {
-  key_st_t *kst, *n;
+  key_st_t  *kst, *n;
+  st_item   *nstm;
+
   if (stm == NULL) {
     return;
   }
 
   /* remove itself from hlist */
+  kst = stm->curkst;
+  if (olist && !list_empty(&stm->olist)) {
+    if (stm->hn.next) {
+      nstm = hlist_entry(stm->hn.next, st_item, hn);
+      list_replace(&stm->olist, &nstm->olist);
+    } else {
+      list_del(&stm->olist);
+    }
+  }
+  
   hlist_del(&stm->hn);
 
   /* del sub kst instance */
@@ -197,6 +210,7 @@ key_st_t *ipv4_cfg_kst_ref(key_st_t *kst)
   /* copy Pointer: next/cond/name, and other attr */
   memcpy(nkst, kst, sizeof(key_st_t));
   INIT_LIST_HEAD(&nkst->list);
+  INIT_LIST_HEAD(&nkst->olist);
   memset(nkst->hlist, 0, sizeof(struct hlist_head) * kst->size);
 
   return nkst;
@@ -212,23 +226,30 @@ key_st_t *ipv4_cfg_kst_ref(key_st_t *kst)
 void ipv4_cfg_kst_release(key_st_t *kst)
 {
   int         i;
-  st_item     *st;
+  st_item     *st, *nst, *hst;
 
-  struct hlist_node  *pos, *n;  
+  struct hlist_node *pos, *n;  
+  struct hlist_head *hh;  
 
   if (kst == NULL) {
     return;
   }
+
   /* remote from list */
   list_del(&kst->list);
-  /* delete stm */
+  //INIT_LIST_HEAD(&kst->olist);
+  /* delete stm 
   for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }
-    hlist_for_each_entry_safe(st, pos, n, &kst->hlist[i], hn) {
-      ipv4_cfg_stm_free(st);
+  */
+  list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
+    hh = (struct hlist_head *)hst->hn.pprev;
+    hlist_for_each_entry_safe(st, pos, n, hh, hn) {
+      ipv4_cfg_stm_free(st, 0);
     }
+    list_del(&hst->olist);
   }
 
   /* only free cur kst, don't free next/name/cond thing */
@@ -266,6 +287,7 @@ key_st_t *ipv4_cfg_kst_malloc(char *key)
   }
   kst->size = kattr->size;
   INIT_LIST_HEAD(&kst->list);
+  INIT_LIST_HEAD(&kst->olist);
   for (i = 0; i < kattr->size; i++) {
     INIT_HLIST_HEAD(&kst->hlist[i]);
   }
@@ -325,7 +347,7 @@ void ipv4_cfg_kst_free(key_st_t *kst)
       continue;
     }
     hlist_for_each_entry_safe(st, pos, n, &kst->hlist[i], hn) {
-      ipv4_cfg_stm_free(st);
+      ipv4_cfg_stm_free(st, 0);
     }
   }
 
@@ -429,6 +451,7 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
     kst->cfgstm = stm;
     stm->type = KST_SPEC;
     hlist_add_head(&stm->hn, &kst->hlist[hash]);
+    list_add_tail(&stm->olist, &kst->olist);
   }
  
   return stm;
@@ -1186,10 +1209,12 @@ void dump_stm(key_st_t *kst, int prefix)
   int         prelen;
   char        *prestr;
   int         i;
-  st_item     *stm;
+  st_item     *stm, *hst, *nst;
   st_t        *st;
   key_st_t    *kpos, *kn;  
+
   struct hlist_node *pos, *n;  
+  struct hlist_head *hh;  
 
   if (!kst) {
     return;
@@ -1210,11 +1235,32 @@ void dump_stm(key_st_t *kst, int prefix)
       prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
 
   /* dump stm */
+  list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
+    hh = (struct hlist_head *)hst->hn.pprev;
+    hlist_for_each_entry_safe(stm, pos, n, hh, hn) {
+      st = &stm->st;
+      printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
+          prestr, stm->curkst->name, stm->curkst, 
+          stm->tm, stm->opt, stm->type, stm);
+
+      printf("%srxpkts:%u, txpkts:%u, syn:%u, "
+          "synack:%u, rxb:%lu, txb:%lu\n", 
+          prestr, st->rxpkts, st->txpkts, st->syn, 
+          st->synack, st->rxbytes, st->txbytes);
+
+      hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
+
+      list_for_each_entry(kpos, &stm->kst_list, list) {
+        dump_stm(kpos, prefix + 1);
+      }
+    }
+  }
+
+  /*
   for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }
-
     hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
       st = &stm->st;
       printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
@@ -1233,7 +1279,8 @@ void dump_stm(key_st_t *kst, int prefix)
       }
     }
   }
-  
+  */
+
   free(prestr);
 
   return;

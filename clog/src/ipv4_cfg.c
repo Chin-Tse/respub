@@ -33,17 +33,17 @@
 /* domain cfg arry */
 kattr_map_t key_attr_map[] = {
   {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip,
-  0,0, ipv4_parse_ip2str, 10000},
+  0,0, ipv4_parse_ip2str, 2000},
   {"dstip", KEY_OFFSET(dstip), KEY_ILEN(dstip), DEF_OLEN, ipv4_parse_ip,
-  0,0, ipv4_parse_ip2str, 100},
+  0,0, ipv4_parse_ip2str, 2000},
   {"sport", KEY_OFFSET(sport), KEY_ILEN(sport), DEF_OLEN, ipv4_parse_uint16, 
-  0,0, ipv4_parse_uint16_str, HASH_SIZE},
+  0,0, ipv4_parse_uint16_str, 300},
   {"dport", KEY_OFFSET(dport), KEY_ILEN(dport), DEF_OLEN, ipv4_parse_uint16,
-  0,0, ipv4_parse_uint16_str, HASH_SIZE},
+  0,0, ipv4_parse_uint16_str, 800},
   {"proto_num", KEY_OFFSET(proto_num), KEY_ILEN(proto_num), DEF_OLEN, ipv4_parse_uint8,
-  0,0, ipv4_parse_uint8_str, 20},
+  0,0, ipv4_parse_uint8_str, 100},
   {"ifname", KEY_OFFSET(ifname), KEY_ILEN(ifname), DEF_OLEN, ipv4_parse_str,
-  0,0,ipv4_parse_str2str, 10},
+  0,0,ipv4_parse_str2str, 50},
 
   {"syn", KEY_OFFSET(syn), KEY_ILEN(syn), DEF_OLEN, ipv4_parse_uint32, 
     ST_OFFSET(syn), ST_ILEN(syn)},
@@ -754,6 +754,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
 
   /* kst-list is ready, add special stm */
   kst = tkst;
+  okst = kst;
   for (i = 0; i < num; i++) {
     if (iniparser_find_entry(ifmt_cfg, keys[i])) {
       if (!kst) {
@@ -766,8 +767,16 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
         fprintf(stderr, "Add config stm fail!\n");
         break;
       }
+
+      if (okst != kst) {
+        okst->opt = kst->opt;
+        okst->mask = kst->mask;
+        okst->cfgstm = kst->cfgstm;
+      }
+
       if (!list_empty(&stm->kst_list)) {
         kst = list_first_entry(&stm->kst_list, key_st_t, list);
+        okst = okst->next;
       } else {
         kst = NULL;
       }
@@ -1298,7 +1307,7 @@ void dump_config(struct list_head *cfglist)
 
   printf("-------------\n");
   list_for_each_entry(cfg, cfglist, list) {
-    //dump_kst(cfg->keyst, 0);
+    dump_kst(cfg->keyst, 0);
     dump_stm(cfg->keyst, 0);
   }
   printf("-------------\n");

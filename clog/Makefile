@@ -33,7 +33,7 @@ $(TARGET): $(CMLIBS) $(OBJS)
 
 $(TOPDIR)/$(OBJDIR)/%.o: $(TOPDIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS)  -o $@ $< $(LDFLAGS)
+	$(CC) -c $(CFLAGS)  -o $@ $< 
 
 $(CMLIBS):
 	@mkdir -p $(LIBDIR)

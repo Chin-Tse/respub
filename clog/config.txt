@@ -17,7 +17,7 @@ interval = 60
     action=drop
     
     #keyword(agrp_qq) should not be any key list in 'log-format'
-    agrp_qq = proto_num, dport, srcip, sport | rxpkts | 1
+    agrp_qq = proto_num, dport, dstip | rxpkts | 1
 
   # diffrent config item should not take a repeated name
   # otherwise it cause fault Error

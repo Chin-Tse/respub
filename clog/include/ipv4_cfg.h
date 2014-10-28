@@ -95,7 +95,7 @@ typedef struct _keystat_ {
 } key_st_t;
 
 /* common stat item */
-typedef struct _st_item_ {
+struct _st_item_ {
   struct hlist_node   hn; 
   struct list_head    kst_list;       /* next key_st */
   key_st_t            *curkst;
@@ -104,7 +104,7 @@ typedef struct _st_item_ {
   uint32_t            tm;             /* the last hit timstamp */
   uint32_t            type;             /* the last hit timstamp */
   char                data[0];        /* this item's key value */
-} st_item;
+} ;
 
 /* config item */
 typedef struct _cfgitem_ {

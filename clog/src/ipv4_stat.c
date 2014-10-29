@@ -228,7 +228,7 @@ key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
   return kstart;
 }
 
-key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
+st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
   int       rv, cmp;
   st_item   *stm;
   st_item   *match = NULL;
@@ -238,6 +238,17 @@ key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
   uint32_t  tmp;
   
   struct hlist_node *hpos;
+  struct hlist_head *hlist;
+
+  if (par_stm) {
+    kst = par_stm->curkst->next;
+    if (!kst) {
+      return NULL;
+    }
+    hlist = par_stm->hlist;
+  } else {
+    hlist = kst->hlist;
+  }
   
   kmem = (char *)ilog + kst->offset;
   if (kst->cfgstm) {

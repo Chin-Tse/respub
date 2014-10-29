@@ -79,7 +79,6 @@ typedef struct _st_item_ st_item;
 typedef struct _keystat_ {
   struct list_head    list;
   cond_t              *cond;              /* config st col & threshold */
-  kst_type_t          kst_type;           /*  */
   uint32_t            opt;                /*  */
   uint32_t            action;
   char                *name;              /* key name */
@@ -98,8 +97,10 @@ typedef struct _keystat_ {
 /* common stat item */
 struct _st_item_ {
   struct hlist_node   hn; 
-  struct list_head    kst_list;       /* next key_st */
-  struct list_head    olist;          /* next key_st */
+  struct list_head    kst_list;       /*  */
+  struct list_head    olist;     /* next stm hlist */
+  struct list_head    next_olist;     /* next stm hlist */
+  struct hlist_head   *hlist;
   key_st_t            *curkst;
   st_t                st;             /* stat info */
   uint32_t            opt;
@@ -243,7 +244,8 @@ void hexprint_buf(
     uint32_t group,
     char *prestr);
 
-void dump_stm(key_st_t *kst, int prefix);
+void dump_stm(st_item *stm, int prefix, int deepin);
+void dump_kst_stm(key_st_t *kst, int prefix);
 void dump_key_attr_map(void);
 void dump_config(struct list_head *cfglist);
 void dump_ilat(ilog_kattr_t *pilat);

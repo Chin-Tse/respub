@@ -99,12 +99,14 @@ typedef struct _keystat_ {
 struct _st_item_ {
   struct hlist_node   hn; 
   struct list_head    kst_list;       /* next key_st */
-  struct list_head    olist;       /* next key_st */
+  struct list_head    olist;          /* next key_st */
   key_st_t            *curkst;
   st_t                st;             /* stat info */
   uint32_t            opt;
   uint32_t            tm;             /* the last hit timstamp */
-  uint32_t            type;             /* the last hit timstamp */
+  uint32_t            type;           /* the last hit timstamp */
+  struct list_head    olist;
+  struct hlist_head   *hlist;         /* st item hash */
   char                data[0];        /* this item's key value */
 } ;
 

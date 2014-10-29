@@ -460,7 +460,7 @@ int ipv4_stat_check_aging(st_item *st)
 void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
 {
   int         i;
-  st_item     *stm;
+  st_item     *stm, *hst, *nst;
   cond_t      *cond;
   key_st_t    *kpos;
   key_st_t    *kstart;
@@ -468,6 +468,7 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
   static int  clv;
   
   struct hlist_node *pos, *n;
+  struct hlist_head *hh;  
 
   if (lv > pnr) {
     return;
@@ -480,12 +481,20 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
     }
   }
 
+  /*
   for (i = 0; i < kst->size; i++) {
     if (hlist_empty(&kst->hlist[i])) {
       continue;
     }
 
     hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
+  */
+
+  /* dump stm */
+  list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
+    hh = (struct hlist_head *)hst->hn.pprev;
+
+    hlist_for_each_entry_safe(stm, pos, n, hh, hn) {
       if (stm->tm != gtimestamp) {
         /* check for aged out */
         if (ipv4_stat_check_aging(stm)) {

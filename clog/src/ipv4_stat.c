@@ -14,8 +14,6 @@
 #include <pthread.h>
 #include <sys/stat.h>
 
-key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog);
-
 /* 100w lines */
 #define MAX_LOG_FILE_SIZE (1000000)
 #define MAX_LOG_FILE_NUM  (10)
@@ -24,6 +22,11 @@ typedef struct r_log_ctrl_ {
   int       out;
   st_item   *stm;
 } rlog_ctl_t;
+
+typedef struct _stat_kst_stm_ {
+  key_st_t  *kst;
+  st_item   *stm;
+} rkst_stm_t;
 
 /* config list */
 struct list_head  cfg_list = LIST_HEAD_INIT(cfg_list);
@@ -169,7 +172,7 @@ static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
   return 0;
 }
 
-key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
+static key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 {
   int       rv = 1;
   int       cmp = 1;
@@ -179,7 +182,6 @@ key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 
 
   if (!kst->cfgstm) {
-    fprintf(stderr, "----Error...check cfg!----\n");
     return NULL;
   } 
 
@@ -220,35 +222,13 @@ key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
     }
   }
 
-  /* 
-  if (kstart) {
-    return ipv4_stat_kst_match(kstart, ilog);
-  }*/
-
   return kstart;
 }
 
-st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
-  int       rv, cmp;
-  st_item   *stm;
-  st_item   *match = NULL;
+static key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
+  int       cmp;
   char      *kmem;
-  key_st_t  *kpos, *kn;
-  uint32_t  hash;
   uint32_t  tmp;
-  
-  struct hlist_node *hpos;
-  struct hlist_head *hlist;
-
-  if (par_stm) {
-    kst = par_stm->curkst->next;
-    if (!kst) {
-      return NULL;
-    }
-    hlist = par_stm->hlist;
-  } else {
-    hlist = kst->hlist;
-  }
   
   kmem = (char *)ilog + kst->offset;
   if (kst->cfgstm) {
@@ -257,9 +237,6 @@ st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
       cmp = memcmp(kst->cfgstm->data, &tmp, kst->ilen);
     } else {
       cmp = memcmp(kst->cfgstm->data, kmem, kst->ilen);
-      if (!cmp) {
-        match = kst->cfgstm;
-      }
     }
 
     if (cmp) {
@@ -275,8 +252,29 @@ st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
     return kst->next;
   }
 
+  return NULL;
+}
+
+static inline st_item *ipv4_stat_kst_ohlist(
+    key_st_t          *kst,
+    ilog_t            *ilog,
+    struct hlist_head *hlist, 
+    struct list_head  *olist)
+{
+  st_item   *stm;
+  st_item   *match = NULL;
+  char      *kmem;
+  uint32_t  hash;
+
+  struct hlist_node *hpos;
+
+  if (!hlist || !kst) {
+    return NULL;
+  }
+  kmem = (char *)ilog + kst->offset;
   hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
-  hlist_for_each_entry(stm, hpos, &kst->hlist[hash], hn) {
+  
+  hlist_for_each_entry(stm, hpos, &hlist[hash], hn) {
     if (!memcmp(stm->data, kmem, kst->ilen)) {
       match = stm;
       break;
@@ -290,11 +288,11 @@ st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
     }
     match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
-    if (!hlist_empty(&kst->hlist[hash])) {
-      hlist_add_after(kst->hlist[hash].first, &match->hn);
+    if (!hlist_empty(&hlist[hash])) {
+      hlist_add_after(hlist[hash].first, &match->hn);
     } else {
-      hlist_add_head(&match->hn, &kst->hlist[hash]);
-      list_add_tail(&match->olist, &kst->olist);
+      hlist_add_head(&match->hn, &hlist[hash]);
+      list_add_tail(&match->olist, olist);
     }
   } 
 
@@ -315,18 +313,21 @@ st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
     match->st.rxbytes = ilog->rxbytes;
   }
 
-  if (list_empty(&match->kst_list)) {
-    return NULL;
-  } else {
-    return list_first_entry(&match->kst_list, key_st_t, list);
+  if (match->hlist) {
+    return match;
   }
 
-  /* next stat 
-  list_for_each_entry(kpos, &match->kst_list, list) {
-    ipv4_stat_kst_match(kpos, ilog);
-  }*/
-
   return NULL;
+}
+
+static inline st_item *ipv4_stat_stm(st_item *stm, ilog_t *ilog) 
+{
+  return ipv4_stat_kst_ohlist(stm->curkst->next, ilog, stm->hlist, &stm->next_olist);
+}
+
+static inline st_item *ipv4_stat_kst(key_st_t *kst, ilog_t *ilog) 
+{
+  return ipv4_stat_kst_ohlist(kst, ilog, kst->hlist, &kst->olist);
 }
 
 /**
@@ -336,21 +337,29 @@ st_item *ipv4_stat_kst_match(st_item *par_stm, key_st_t *kst, ilog_t *ilog) {
  * @param ilog [in] input log 
  *
  */
-void ipv4_stat_kst(key_st_t *kst, ilog_t *ilog)
+void ipv4_stat_cfg(key_st_t *kst, ilog_t *ilog)
 {
-  key_st_t *(*sfunc)(key_st_t *kst, ilog_t *ilog);
+  key_st_t  *(*sfunc)(key_st_t *kst, ilog_t *ilog);
+  st_item   *stm;
 
   if (!kst) {
     return;
   }
 
-  while (kst) {
-    if (kst->action) {
-      sfunc = ipv4_stat_kst_filter;
-    } else {
+  while (kst && kst->cfgstm) {
+    if (!kst->action) {
       sfunc = ipv4_stat_kst_match;
+    } else {
+      sfunc = ipv4_stat_kst_filter;
     }
     kst = sfunc(kst, ilog);
+  }
+
+  if (kst) {
+    stm = ipv4_stat_kst(kst, ilog);
+    while (stm) {
+      stm = ipv4_stat_stm(stm, ilog);
+    }
   }
 
   return;
@@ -641,7 +650,7 @@ int ipv4_stat(
 		if(ipv4_stat_parse(buf, &info, pilat) == 0) {
       cfg_t   *cfg;
       list_for_each_entry(cfg, cfglist, list) {
-        ipv4_stat_kst(cfg->keyst, &info);
+        ipv4_stat_cfg(cfg->keyst, &info);
       }
 		}
     /* don't get time every line */

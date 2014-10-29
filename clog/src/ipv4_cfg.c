@@ -1242,7 +1242,6 @@ void dump_stm(st_item *stm, int prefix, int deepin)
   char        *prestr;
 
   st_item     *pstm, *hst, *nst;
-  st_t        *st;
   struct hlist_node *pos, *n;  
   struct hlist_head *hh;  
 
@@ -1287,7 +1286,6 @@ void dump_kst_stm(key_st_t *kst, int prefix)
   char        *prestr;
   int         i;
   st_item     *stm, *hst, *nst;
-  st_t        *st;
   key_st_t    *kpos, *kn;  
 
   struct hlist_node *pos, *n;  
@@ -1342,8 +1340,6 @@ void dump_kst(key_st_t *kst, int prefix)
   int         prelen;
   char        *prestr;
   cond_t      *cpos, *cn;
-  st_item     *stm;
-  st_t        *st;
 
   if (kst == NULL) {
     return;
@@ -1364,18 +1360,7 @@ void dump_kst(key_st_t *kst, int prefix)
       prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
 
   if (kst->cfgstm) {
-    stm = kst->cfgstm;
-    st = &stm->st;
-    printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
-        prestr, stm->curkst->name, stm->curkst, 
-        stm->tm, stm->opt, stm->type, stm);
-
-    printf("%srxpkts:%u, txpkts:%u, syn:%u, "
-        "synack:%u, rxb:%lu, txb:%lu\n", 
-        prestr, st->rxpkts, st->txpkts, st->syn, 
-        st->synack, st->rxbytes, st->txbytes);
-
-    hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
+    print_stm(kst->cfgstm);
   }
 
   /* only free in top kst */

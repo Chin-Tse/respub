@@ -14,7 +14,7 @@
 #include <pthread.h>
 #include <sys/stat.h>
 
-void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog);
+key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog);
 
 /* 100w lines */
 #define MAX_LOG_FILE_SIZE (1000000)
@@ -169,7 +169,7 @@ static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
   return 0;
 }
 
-void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
+key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 {
   int       rv = 1;
   int       cmp = 1;
@@ -180,10 +180,13 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 
   if (!kst->cfgstm) {
     fprintf(stderr, "----Error...check cfg!----\n");
-    return;
+    return NULL;
   } 
 
   for (kstart = kst; kstart && kstart->cfgstm; kstart = kstart->next) {
+    if (!kstart->action) {
+      return kstart;
+    }
     kmem = (char *)ilog + kstart->offset;
     if (kstart->mask) {
       tmp = *(uint32_t *)kmem & kstart->mask;
@@ -195,7 +198,7 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
       }
 
       if (kstart->next && kstart->next->action == 0 && rv) {
-        return;
+        return NULL;
       }
     } else {
       cmp = memcmp(kstart->cfgstm->data, kmem, kstart->ilen);
@@ -205,7 +208,7 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
         rv = !kstart->opt;
       }
       if (kstart->next && kstart->next->action == 0 && rv) {
-        return;
+        return NULL;
       }
     }
 
@@ -217,14 +220,15 @@ void ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
     }
   }
 
+  /* 
   if (kstart) {
     return ipv4_stat_kst_match(kstart, ilog);
-  }
+  }*/
 
-  return;
+  return kstart;
 }
 
-void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
+key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
   int       rv, cmp;
   st_item   *stm;
   st_item   *match = NULL;
@@ -249,17 +253,15 @@ void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
 
     if (cmp) {
       if (kst->opt == 0 && kst->action == 0) {
-        return;
+        return NULL;
       } 
     } else {
       if (kst->opt && kst->action == 0) {
-        return;
+        return NULL;
       }
     }
 
-    if (match) {
-      goto mch;
-    }
+    return kst->next;
   }
 
   hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
@@ -273,7 +275,7 @@ void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
   if (!match) {
     match = ipv4_cfg_stm_malloc(kst);
     if (!match) {
-      return;
+      return NULL;
     }
     match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
@@ -285,7 +287,6 @@ void ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
     }
   } 
 
-mch:
   if (match->tm == 0 && match->tm == gtimestamp) {
     match->st.syn += ilog->syn;
     match->st.synack += ilog->synack;
@@ -303,12 +304,18 @@ mch:
     match->st.rxbytes = ilog->rxbytes;
   }
 
-  /* next stat */
-  list_for_each_entry(kpos, &match->kst_list, list) {
-    ipv4_stat_kst_match(kpos, ilog);
+  if (list_empty(&match->kst_list)) {
+    return NULL;
+  } else {
+    return list_first_entry(&match->kst_list, key_st_t, list);
   }
 
-  return;
+  /* next stat 
+  list_for_each_entry(kpos, &match->kst_list, list) {
+    ipv4_stat_kst_match(kpos, ilog);
+  }*/
+
+  return NULL;
 }
 
 /**
@@ -320,14 +327,19 @@ mch:
  */
 void ipv4_stat_kst(key_st_t *kst, ilog_t *ilog)
 {
+  key_st_t *(*sfunc)(key_st_t *kst, ilog_t *ilog);
+
   if (!kst) {
     return;
   }
 
-  if (kst->action) {
-    ipv4_stat_kst_filter(kst, ilog);
-  } else {
-    ipv4_stat_kst_match(kst, ilog);
+  while (kst) {
+    if (kst->action) {
+      sfunc = ipv4_stat_kst_filter;
+    } else {
+      sfunc = ipv4_stat_kst_match;
+    }
+    kst = sfunc(kst, ilog);
   }
 
   return;
@@ -444,7 +456,9 @@ int ipv4_stat_check_aging(st_item *st)
   if (st->tm == 0) {
     return 0;
   }
+  //printf("----------aging----------\n");
   return 1;
+
   if (gtimestamp > st->tm) {
     ticks = gtimestamp - st->tm  - 1;
     if (ticks * interval > STM_AGING_TIME) {
@@ -474,26 +488,15 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
     return;
   }
 
-  while (kst->action) {
+  while (kst->cfgstm) {
     kst =  kst->next;
     if (!kst) {
       return;
     }
   }
 
-  /*
-  for (i = 0; i < kst->size; i++) {
-    if (hlist_empty(&kst->hlist[i])) {
-      continue;
-    }
-
-    hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
-  */
-
-  /* dump stm */
   list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
     hh = (struct hlist_head *)hst->hn.pprev;
-
     hlist_for_each_entry_safe(stm, pos, n, hh, hn) {
       if (stm->tm != gtimestamp) {
         /* check for aged out */

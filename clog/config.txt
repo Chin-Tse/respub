@@ -14,7 +14,7 @@ interval = 60
     #proto_num = 17
     dport=80
     dstip=172.16.0.149/24
-    action=drop
+    action=accept
     
     #keyword(agrp_qq) should not be any key list in 'log-format'
     agrp_qq = proto_num, dport, dstip | rxpkts | 1

@@ -89,7 +89,7 @@ typedef struct _keystat_ {
   uint32_t            mask;               /* imask */
   uint32_t            olen;               /* output space */
   ipv4_unparse_f      upfunc;
-  st_item             *cfgstm;            /* output space */
+  st_item             *cfgstm;
   uint32_t            size;
   struct list_head    olist;
   struct hlist_head   hlist[0];   /* st item hash */
@@ -104,9 +104,7 @@ struct _st_item_ {
   st_t                st;             /* stat info */
   uint32_t            opt;
   uint32_t            tm;             /* the last hit timstamp */
-  uint32_t            type;           /* the last hit timstamp */
-  struct list_head    olist;
-  struct hlist_head   *hlist;         /* st item hash */
+  uint32_t            type;             /* the last hit timstamp */
   char                data[0];        /* this item's key value */
 } ;
 

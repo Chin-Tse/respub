@@ -1219,6 +1219,13 @@ void dump_stm(key_st_t *kst, int prefix)
   if (!kst) {
     return;
   }
+  
+  while (kst->cfgstm) {
+    kst =  kst->next;
+    if (!kst) {
+      return;
+    }
+  }
 
   prelen = 1;
   if (prefix > 0) {
@@ -1256,31 +1263,6 @@ void dump_stm(key_st_t *kst, int prefix)
     }
   }
 
-  /*
-  for (i = 0; i < kst->size; i++) {
-    if (hlist_empty(&kst->hlist[i])) {
-      continue;
-    }
-    hlist_for_each_entry_safe(stm, pos, n, &kst->hlist[i], hn) {
-      st = &stm->st;
-      printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
-          prestr, stm->curkst->name, stm->curkst, 
-          stm->tm, stm->opt, stm->type, stm);
-
-      printf("%srxpkts:%u, txpkts:%u, syn:%u, "
-          "synack:%u, rxb:%lu, txb:%lu\n", 
-          prestr, st->rxpkts, st->txpkts, st->syn, 
-          st->synack, st->rxbytes, st->txbytes);
-
-      hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
-
-      list_for_each_entry(kpos, &stm->kst_list, list) {
-        dump_stm(kpos, prefix + 1);
-      }
-    }
-  }
-  */
-
   free(prestr);
 
   return;
@@ -1297,6 +1279,8 @@ void dump_kst(key_st_t *kst, int prefix)
   int         prelen;
   char        *prestr;
   cond_t      *cpos, *cn;
+  st_item     *stm;
+  st_t        *st;
 
   if (kst == NULL) {
     return;
@@ -1311,10 +1295,25 @@ void dump_kst(key_st_t *kst, int prefix)
   memset(prestr, ' ', prelen);
   prestr[prelen - 1] = '\0';
 
-  printf("%sname:%s, opt:%u,act:%d, %p\n", 
+  printf("%skstname:%s, opt:%u,act:%d, %p\n", 
       prestr, kst->name, kst->opt, kst->action, (void*)kst);
   printf("%soffset:%u, ilen:%u, olen:%u, mask:%x, cfgstm:%p\n", 
       prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
+
+  if (kst->cfgstm) {
+    stm = kst->cfgstm;
+    st = &stm->st;
+    printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
+        prestr, stm->curkst->name, stm->curkst, 
+        stm->tm, stm->opt, stm->type, stm);
+
+    printf("%srxpkts:%u, txpkts:%u, syn:%u, "
+        "synack:%u, rxb:%lu, txb:%lu\n", 
+        prestr, st->rxpkts, st->txpkts, st->syn, 
+        st->synack, st->rxbytes, st->txbytes);
+
+    hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
+  }
 
   /* only free in top kst */
   if (kst->cond) {

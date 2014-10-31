@@ -14,16 +14,19 @@
 #include "strsplit.h"
 
 #define DEF_OLEN    (12)
-#define CFG_FILE    "./config.txt"
-#define IPATH_CFG    "path:input"
-#define OPATH_CFG    "path:output"
-#define RESULT_CFG   "path:result"
-#define TIME_CFG     "time:interval"
+#define CFG_FILE      "./config.txt"
+#define IPATH_CFG     "log:input"
+#define OPATH_CFG     "log:output"
+#define RESULT_CFG    "log:result"
+#define RESULT_NUM    "log:result_flile_num"
+#define OUTFILE_NUM   "log:out_file_num"
+#define TIME_CFG      "time:interval"
 
 #define IFMT_CFG    "log-format"
 #define OFMT_CFG    "outlog-format"
 #define AGRP_CFG    "auto-grp"
 #define SGRP_CFG    "spc-grp"
+#define HASH_CFG    "hash-size"
 
 #define KEY_OFFSET(key)  offsetof(ilog_t, key)
 #define KEY_ILEN(key)    sizeof(((ilog_t*)0)->key)
@@ -453,9 +456,7 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
         if (msk >= 32) {
           kst->mask = 0;
         } else {
-          //kst->mask =  ~((1 << ((kst->ilen << 3)- msk)) - 1);
           kst->mask =  ((1 << msk) - 1);
-          printf("=3=%s, %s, %d,0x%08x\n", psmsk, val, msk, kst->mask);
         }
       }
     }
@@ -638,7 +639,7 @@ key_st_t *ipv4_cfg_aitem_add(key_st_t *tkst, acfg_item_t *acfg_item)
 
   if (tkst) {
     okst = tkst;
-    while ( okst->cfgstm && okst->next) {
+    while ( okst->kst_type == KST_SPEC && okst->next) {
       okst = okst->next;
     }
     tcond = tkst->cond;
@@ -764,6 +765,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
       if (ipv4_cfg_kst_init(kst, keys[i])) {
         goto err;
       }
+      kst->kst_type = KST_SPEC;
       continue;
     } else {
       if (!strcmp(keys[i], "action")) {
@@ -780,7 +782,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
           akst = tkst;
         }
         for (; j < i; j++) {
-          if (akst->cfgstm) {
+          if (akst->kst_type == KST_SPEC) {
             akst->action = action;
           }
           if (akst->next) {
@@ -1089,6 +1091,24 @@ int ipv4_cfg_get_interval(dictionary *dcfg)
   return ti;
 }
 
+int ipv4_cfg_get_ofnum(dictionary *dcfg)
+{
+  int ofnum;
+
+  ofnum = iniparser_getint(dcfg, OUTFILE_NUM, 10);
+
+  return ofnum;
+}
+
+int ipv4_cfg_get_rfnum(dictionary *dcfg)
+{
+  int rfnum;
+
+  rfnum = iniparser_getint(dcfg, RESULT_NUM, 2);
+
+  return rfnum;
+}
+
 /**
  * @brief Displays data as hexadecimal data
  *
@@ -1222,9 +1242,9 @@ void print_stm(st_item *stm, char *prestr)
     return;
   }
   st = &stm->st;
-  printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
+  printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, hlist:%p, cur:%p\n", 
       prestr, stm->curkst->name, stm->curkst, 
-      stm->tm, stm->opt, stm->type, stm);
+      stm->tm, stm->opt, stm->hlist, stm);
 
   printf("%srxpkts:%u, txpkts:%u, syn:%u, "
       "synack:%u, rxb:%lu, txb:%lu\n", 
@@ -1268,10 +1288,7 @@ void dump_stm(st_item *stm, int prefix, int deepin)
   list_for_each_entry_safe(hst, nst, &stm->next_olist, olist) {
     hh = (struct hlist_head *)hst->hn.pprev;
     hlist_for_each_entry_safe(pstm, pos, n, hh, hn) {
-      print_stm(pstm, prestr);
-      if (pstm->hlist) {
-        dump_stm(pstm, prefix + 1, 1);
-      }
+      dump_stm(pstm, prefix + 1, 1);
     }
   }
 
@@ -1320,7 +1337,7 @@ void dump_kst_stm(key_st_t *kst, int prefix)
   list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
     hh = (struct hlist_head *)hst->hn.pprev;
     hlist_for_each_entry_safe(stm, pos, n, hh, hn) {
-      dump_stm(stm, prefix + 1, 1);
+      dump_stm(stm, prefix, 1);
     }
   }
 
@@ -1354,13 +1371,15 @@ void dump_kst(key_st_t *kst, int prefix)
   memset(prestr, ' ', prelen);
   prestr[prelen - 1] = '\0';
 
-  printf("%skstname:%s, opt:%u,act:%d, %p\n", 
-      prestr, kst->name, kst->opt, kst->action, (void*)kst);
-  printf("%soffset:%u, ilen:%u, olen:%u, mask:%x, cfgstm:%p\n", 
-      prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
+  printf("%skstname:%s, opt:%u,act:%d, cur:%p, next:%p\n", 
+      prestr, kst->name, kst->opt, kst->action, (void*)kst, kst->next);
+  printf("%soffset:%u, ilen:%u, olen:%u, mask:0x%08x,"
+      "size:%d, cfgstm:%p\n", 
+      prestr, kst->offset, kst->ilen, kst->olen, kst->mask, 
+      kst->size, kst->cfgstm);
 
   if (kst->cfgstm) {
-    print_stm(kst->cfgstm);
+    print_stm(kst->cfgstm, prestr);
   }
 
   /* only free in top kst */

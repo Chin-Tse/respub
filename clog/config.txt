@@ -1,9 +1,13 @@
-########## user config region ###########
-[path]
-  #input=/home/see/clog/ipv4.log
-  input=./ipv4_log_0
-  output=./pkstat
-  result=./stat0
+
+########## Common config region ###########
+[log]
+  input = ipv4_log_0
+  output = pkstat
+  result = stat0
+
+  #100W lines every file, about 120M in size
+  out_file_num = 10
+  result_file_num = 10
 
 [time]
 interval = 60
@@ -12,20 +16,17 @@ interval = 60
   [[sgrp1]]
     # keyword must be list in 'log-format'
     #proto_num = 17
-    dport=80
-    dstip=172.16.0.149/24
-    action=accept
+    #dport=80
+    dstip=!172.16.0.149/24
+    action=drop
+    #dport=80
     
     #keyword(agrp_qq) should not be any key list in 'log-format'
     agrp_qq = proto_num, dport, dstip | rxpkts | 1
 
-  # diffrent config item should not take a repeated name
-  # otherwise it cause fault Error
-
-
-########## Innercfg:don't change this region ###########
+########## Advanced Configuration ###########
 # this domain define the log file format
-# specify names for cols used by cfgitem latter
+# Specify cols for names used by cfgitem 
 # names should not be changed
 # 192.168.26.93,51889,172.16.0.93,6000,udp,17,em1,recv,10,2220,send,1,250,syn,0,syn+ack,0,code,0,type,0,0
 [log-format]
@@ -60,7 +61,13 @@ interval = 60
   syn=10
   synack=10
 
-########## Innercfg : End     ###########
-
-
+# Use this domain to blance memory used and performance
+[hash-size]
+  srcip=2000
+  sport=200
+  dstip=2000
+  dport=800
+  proto_num=200
+  ifname=6
+########## Advanced Configuration end #######
  

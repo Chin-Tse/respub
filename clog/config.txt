@@ -13,12 +13,12 @@
   #   output = /var/log/pklog，
   #   该配置将在/var/log/下逆时间顺序生成 pklog.0、pklog.1...
 
-  output = pkstat
+  output = /var/log/pklog
 
   # result统计结果输出
   # 同报文转储output设置
 
-  result = stat0
+  result = /var/log/pkstat 
 
   # 文件数量控制
   # 分别控制output和result输出文件数目

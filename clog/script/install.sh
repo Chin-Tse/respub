@@ -3,9 +3,11 @@
 base_name=ipv4_log
 pkg_dir=ipv4_log
 bin_file=$pkg_dir/bin/$base_name
-cfg_file=$pkg_dir/etc/$base_name.cfg
+cfg_file=$pkg_dir/etc/config.txt
 service_script=$pkg_dir/etc/$base_name
-ins_dir=/usr/local/$base_name
+ins_dir=/usr/local/$pkg_dir
+run_bin=$ins_dir/bin/$base_name
+
 
 
 stop_running()
@@ -19,9 +21,9 @@ stop_running()
 	# the log mode for example,when we change to proc from ulogd,then when we stop,
 	# we may try to stop cat_line but not ipv4_ulogd in service stop,and then the
 	# ipv4_ulogd may still running,we need to stop it here)
-	num=`ps aux | grep cat_line | grep -v grep | wc -l`
+	num=`ps aux | grep $run_bin | grep -v grep | wc -l`
 	if [ $num -gt 0 ];then
-		killall cat_line
+		killall $run_bin
 	fi
 
 }

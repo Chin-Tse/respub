@@ -916,7 +916,7 @@ void ipv4_cfg_kattr_hash_update(dictionary *dcfg)
   for (i = 0; i < hsize; i++) {
     kattr = ipv4_cfg_kattr_get(keys[i]);
     if (!kattr) {
-      fprintf(stderr, "Error config keyword:%d!\n", keys[i]);
+      fprintf(stderr, "Error config keyword:%s!\n", keys[i]);
       continue;
     }
     size = iniparser_getint(hash_cfg, keys[i], 0);

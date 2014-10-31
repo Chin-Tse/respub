@@ -68,6 +68,7 @@ void ipv4_parse_uint64(char *mem, int len, char *val);
 
 char *ipv4_parse_str2str(char *mem);
 char *ipv4_parse_ip2str(char *mem);
+char *ipv4_parse_proto_str(char *mem);
 char *ipv4_parse_uint64_str(char *mem);
 char *ipv4_parse_uint32_str(char *mem);
 char *ipv4_parse_uint16_str(char *mem);

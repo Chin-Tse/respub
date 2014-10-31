@@ -65,8 +65,8 @@ interval = 60
 [hash-size]
   srcip=2000
   sport=200
-  dstip=2000
-  dport=800
+  dstip=20
+  dport=2000
   proto_num=200
   ifname=6
 ########## Advanced Configuration end #######

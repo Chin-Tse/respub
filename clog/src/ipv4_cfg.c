@@ -44,7 +44,7 @@ kattr_map_t key_attr_map[] = {
   {"dport", KEY_OFFSET(dport), KEY_ILEN(dport), DEF_OLEN, ipv4_parse_uint16,
   0,0, ipv4_parse_uint16_str, 800},
   {"proto_num", KEY_OFFSET(proto_num), KEY_ILEN(proto_num), DEF_OLEN, ipv4_parse_uint8,
-  0,0, ipv4_parse_uint8_str, 100},
+  0,0, ipv4_parse_proto_str, 100},
   {"ifname", KEY_OFFSET(ifname), KEY_ILEN(ifname), DEF_OLEN, ipv4_parse_str,
   0,0,ipv4_parse_str2str, 50},
 
@@ -898,6 +898,44 @@ kattr_map_t *ipv4_cfg_kattr_get(const char *key)
   return NULL;
 }
 
+void ipv4_cfg_kattr_hash_update(dictionary *dcfg)
+{
+  dictionary    *hash_cfg = NULL;
+  char          **keys = NULL;
+  kattr_map_t   *kattr = NULL;
+  int           i, hsize, size;
+
+  hash_cfg = iniparser_str_getsec(dcfg, HASH_CFG);
+  if (!hash_cfg) {
+    return;
+  }
+  
+  hsize = iniparser_getsecnkeys(dcfg, HASH_CFG);
+  keys = iniparser_getseckeys(dcfg, HASH_CFG);
+  
+  for (i = 0; i < hsize; i++) {
+    kattr = ipv4_cfg_kattr_get(keys[i]);
+    if (!kattr) {
+      fprintf(stderr, "Error config keyword:%d!\n", keys[i]);
+      continue;
+    }
+    size = iniparser_getint(hash_cfg, keys[i], 0);
+    if (size == 0) {
+      continue;
+    }
+    kattr->size = size;
+    //dbg_prt("Kattr:%s, hash-size:%d update.\n", kattr->kname, kattr->size);
+    fprintf(stdout, "%s update hash-size:%d.\n", kattr->kname, kattr->size);
+  }
+
+  if (keys) {
+    free(keys);
+    keys = NULL;
+  }
+
+  return;
+}
+
 /**
  * @brief Init key attr map array, return ilog_kattr array
  *
@@ -920,6 +958,9 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
   if (dcfg == NULL) {
     return NULL;
   }
+
+  /* update kattr_map first */
+  ipv4_cfg_kattr_hash_update(dcfg);
 
   /* get sub config, not need to free sub-dict */
   ifmt_cfg = iniparser_str_getsec(dcfg, IFMT_CFG);
@@ -959,6 +1000,7 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
 out:
   if (keys) {
     free(keys);
+    keys = NULL;
   }
 
   return ilog_kattr;

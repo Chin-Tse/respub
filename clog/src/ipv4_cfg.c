@@ -15,6 +15,7 @@
 
 #define DEF_OLEN    (12)
 #define CFG_FILE      "./config.txt"
+#define CFG_FILE2      "/usr/local/ipv4_log/etc/config.txt"
 #define IPATH_CFG     "log:input"
 #define OPATH_CFG     "log:output"
 #define RESULT_CFG    "log:result"
@@ -22,11 +23,11 @@
 #define OUTFILE_NUM   "log:out_file_num"
 #define TIME_CFG      "time:interval"
 
-#define IFMT_CFG    "log-format"
-#define OFMT_CFG    "outlog-format"
-#define AGRP_CFG    "auto-grp"
-#define SGRP_CFG    "spc-grp"
-#define HASH_CFG    "hash-size"
+#define IFMT_CFG      "log-format"
+#define OFMT_CFG      "outlog-format"
+#define AGRP_CFG      "auto-grp"
+#define SGRP_CFG      "spc-grp"
+#define HASH_CFG      "hash-size"
 
 #define KEY_OFFSET(key)  offsetof(ilog_t, key)
 #define KEY_ILEN(key)    sizeof(((ilog_t*)0)->key)
@@ -1025,11 +1026,19 @@ dictionary *ipv4_readcfg(char *cfgname,
     return NULL;
   }
 
-  dcfg = iniparser_load(CFG_FILE);
-  if (!dcfg) {
-    goto out;
+  /*  */
+  if (access(CFG_FILE, F_OK) == 0) {
+    dcfg = iniparser_load(CFG_FILE);
+    if (!dcfg) {
+      goto out;
+    }
+  } else {
+    dcfg = iniparser_load(CFG_FILE2);
+    if (!dcfg) {
+      goto out;
+    }
   }
-
+  
   pilog_kattr = ipv4_cfg_kattr_init(dcfg);
   if (!pilog_kattr) {
     goto out;

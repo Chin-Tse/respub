@@ -1,34 +1,88 @@
 
 ########## Common config region ###########
 [log]
+  # 1、配置报文统计输入源，当统计本地log文件时，设置为本地文件路径
+  # 需要注意的是本地文件的格式需要和'log-format'中配置的格式一致。
+  # 2、实时统计系统报文，则将input设置为/proc/net/ipv4_log
+
   input = ipv4_log_0
+  
+  # output 报文转储
+  # 每个文件100W 条记录，约120M 
+  # eg1.被统计报文的基本信息将被报文到/var/log/下，以pklog做文件名前缀
+  #   output = /var/log/pklog，
+  #   该配置将在/var/log/下逆时间顺序生成 pklog.0、pklog.1...
+
   output = pkstat
+
+  # result统计结果输出
+  # 同报文转储output设置
+
   result = stat0
 
-  #100W lines every file, about 120M in size
+  # 文件数量控制
+  # 分别控制output和result输出文件数目
+
   out_file_num = 10
   result_file_num = 10
 
 [time]
+#统计结果检查输出的时间间隔
 interval = 60
 
 [spc-grp]
-  [[sgrp1]]
-    # keyword must be list in 'log-format'
-    #proto_num = 17
-    #dport=80
-    dstip=!172.16.0.149/24
-    action=drop
-    #dport=80
+  #统计组设置，可以设置多个统计组，统计组之间最好没有报文重叠
+  #在统计组间报文不重叠的情况下，统计性能不受多组影响。
+  #如统计组1（srgp1）只进行tcp报文统计，而统计组2只进行非tcp报文统计
+  #那么sgrp1就可以设置syn阀值而不影响udp报文（udp报文syn总是0）的统计输出。
+  [[sgrp1]] 
+    # 统计报文匹配/过滤条件设置区域
+    # 该区域的条件设置关键字必须为 'log-format'中列出的关键字名称
+    # eg1.0. 匹配tcp报文：
+    #   proto_num = 17
+    #   action = accept
+    # eg1.1. 在tcp报文中，不统计（过滤）源端口为80并且源ip为172.16.0.0/24网段的报文，在eg1.0的配置之后增加：
+    # 	sport=80
+    #   srcip=172.16.0.0/24
+    #   action=drop
+    # eg2.0 统计目的ip不为172.16.0.149的报文：
+    #   可以：
+    #   dstip = !172.16.0.149
+    #   action = accept
+    #   或:
+    #   dstip = 172.16.0.149
+    #   action = drop
+    # 该配置区域可以为空，默认统计所有报文。
     
-    #keyword(agrp_qq) should not be any key list in 'log-format'
+    #分组统计配置
+    #约束：名称(agrp_qq)不能和以下'log-format'字段内关键字重名， 
+    #      值段中关键字则需要是'log-format'字段内关键字
+    #示例：agrp_qq = proto_num, dport, dstip | rxpkts | 2
+    #其中agrp_qq为名称，该配置首先按照协议号(如tcp 17， udp 6）进行分组
+    #再按dport目的端口分组，统计每一个dstip（目的ip）对应的流量信息
+    #rxpkts和2表示只有当接收报文个数（rxpkts）不少于2的统计项才输出到统计日志中。
+    #该配置统计输出信息类似：
+    #2014-10-31-14:22
+    #proto_num:tcp
+    #  dport:80
+    #    dstip:172.16.0.149,rxpkts:331, rxbytes:13400, txpkts:550, txbytes:795191, syn:1, synack:1
+    #    dstip:172.16.0.9,rxpkts:279, rxbytes:11320, txpkts:534, txbytes:794551, syn:1, synack:1
+    #  dport:445
+    #    dstip:172.16.0.149,rxpkts:4, rxbytes:266, txpkts:2, txbytes:186, syn:0, synack:0
+    #proto_num:udp
+    #  dport:6000
+    #    dstip:172.16.0.149,rxpkts:614, rxbytes:1462548, txpkts:61, txbytes:35136, syn:0, synack:0
+    
     agrp_qq = proto_num, dport, dstip | rxpkts | 1
 
 ########## Advanced Configuration ###########
-# this domain define the log file format
-# Specify cols for names used by cfgitem 
-# names should not be changed
-# 192.168.26.93,51889,172.16.0.93,6000,udp,17,em1,recv,10,2220,send,1,250,syn,0,syn+ack,0,code,0,type,0,0
+# 'log-format' 区域定义输入文件格式。
+# 输入文件格式为cvs格式，列间以逗号分隔
+# 以下区域指定各个关注内容所在的列。 
+# eg1. 指定srcip信息所在的列
+#   一行log的内容如：192.168.26.93,51889,172.16.0.93,6000,udp,17,em1,recv,10,2220,send,1,250,syn,0,syn+ack,0,code,0,type,0,0
+#   源ip信息在第1列则：
+#   srcip = 0
 [log-format]
   srcip=0
   sport=1
@@ -44,6 +98,7 @@ interval = 60
   syn=14
   synack=16
 
+# 暂预留
 # specify how much space take for each item
 # eg. 'srcip=16' would be used like %16s when output srcip content
 [outlog-format]
@@ -61,13 +116,15 @@ interval = 60
   syn=10
   synack=10
 
+# 哈希配置
+# 通过该配置可平衡不同场景下内存消耗和统计性能表现
 # Use this domain to blance memory used and performance
 [hash-size]
-  srcip=2000
-  sport=200
-  dstip=20
   dport=2000
   proto_num=200
+  dstip=200
   ifname=6
+  srcip=2000
+  sport=200
 ########## Advanced Configuration end #######
  

@@ -101,7 +101,7 @@ check_still_running()
 	local cat_num=`ps aux | grep $CAT | grep -v grep | grep -v vi |wc -l`
 	if [ $cat_num -gt 0 ];then
 		killproc $CAT
-		debug_out $? "Stopping cat_line:"
+		debug_out $? "Stopping ipv4_log:"
 	fi
 
 }

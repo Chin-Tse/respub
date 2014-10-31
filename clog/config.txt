@@ -5,7 +5,7 @@
   # 需要注意的是本地文件的格式需要和'log-format'中配置的格式一致。
   # 2、实时统计系统报文，则将input设置为/proc/net/ipv4_log
 
-  input = ipv4_log_0
+  input = /proc/net/ipv4_log
   
   # output 报文转储
   # 每个文件100W 条记录，约120M 
@@ -25,6 +25,8 @@
 
   out_file_num = 10
   result_file_num = 10
+
+  ip_conntrack_max = 300000
 
 [time]
 #统计结果检查输出的时间间隔

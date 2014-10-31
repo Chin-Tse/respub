@@ -60,7 +60,7 @@ parse_config()
 {
 	local key=$1
 	local spliter="="
-	cat $CONF | grep "^${key}${spliter}" | grep -v "^#" | awk -F "${spliter}" '{print $2}' | grep -o "[^ ]\+\( \+[^ ]\+\)*"
+	cat $CONF | grep "^${key}" | grep -v "^#" | awk -F "${spliter}" '{print $2}' | grep -o "[^ ]\+\( \+[^ ]\+\)*"
 }
 
 if [ ! -d $PROG_PATH ];then
@@ -173,7 +173,7 @@ config_start()
 	if [ $cfg_conn_max -gt $sys_conn_max ];then
 		echo $cfg_conn_max > /proc/sys/net/ipv4/netfilter/ip_conntrack_max 
 	fi
-	local expire=`parse_config expire`
+	local expire=`parse_config interval`
 	if [ $expire -lt 1 ];then
 		debug_out 2 "Invalid config(expire),use default value(60) instead!"
 		expire=60

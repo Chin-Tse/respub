@@ -57,11 +57,21 @@ install_check()
 {
 	if [ ! -d $ins_dir ];then
 		echo "$base_name install fail!"
+    return;
 	fi
+
 	if [ ! -x $ins_dir/bin/$base_name ];then
 		echo "$base_name install fail!"
 		rm -rf $ins_dir
+    return;
 	fi
+
+  if [ ! -x $ins_dir/etc/$cfg_file ];then
+		echo "$base_name install fail!"
+		rm -rf $ins_dir
+    return;
+	fi
+
 	if [ ! -x /etc/init.d/$base_name ];then
 		echo "$base_name install fail!"
 		/sbin/chkconfig $base_name off
@@ -71,7 +81,9 @@ install_check()
 		if [ -d $ins_dir ];then
 			rm -rf $ins_dir
 		fi
+    return;
 	fi
+  echo "ConfigFile locate in $ins_dir/etc/$cfg_file."
 	echo "$base_name install successful!"
 }
 

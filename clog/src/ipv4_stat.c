@@ -11,6 +11,7 @@
 #include "bench.h"
 #include "ipv4_cfg.h"
 #include "ipv4_parse.h"
+#include "version.h"
 #include <pthread.h>
 #include <sys/stat.h>
 
@@ -792,6 +793,8 @@ int ipv4_stat_create_dir(char *ofname)
 
 int main(int argc,char* argv[])
 {
+  fprintf(stdout, "IPv4 Log Version:%d\n", VERSION);
+
   gdcfg = ipv4_readcfg("./config.txt", &cfg_list, &gpilat);
 
   if (!gdcfg) {

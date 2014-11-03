@@ -47,6 +47,7 @@ dictionary        *gdcfg;
 FILE *in_fd = NULL;
 FILE *out_fd = NULL;
 FILE *result_fd = NULL;
+FILE *stat_fd =  NULL;
 
 char *in_fname = NULL;
 char *out_fname = NULL;
@@ -105,6 +106,12 @@ FILE *ipv4_stat_mv_logfile(FILE *log_fd, char *basename, log_t type)
   if (basename == NULL) {
     return NULL;
   }
+
+  if (!log_fd) {
+    cnt = log_file_num[type];
+  }
+
+  dbg_prt("basename:%s, fd:%p, type:%d, cnt:%d\n", basename, log_fd, type, cnt);
 
   /* remove oldest file */
   if(cnt == log_file_num[type]) {
@@ -428,7 +435,6 @@ void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
   char      *pbuf;
   st_t      *st;
   ipv4_unparse_f func;
-  static FILE *stat_fd =  NULL;
   static char buf[1024];
   
   
@@ -703,7 +709,7 @@ int ipv4_stat(
       gtimestamp = oldtime;
       time ( &rawtime );
       timeinfo = localtime ( &rawtime );
-      strftime (buffer,80,"%Y-%M-%d-%h:%m",timeinfo);
+      strftime (buffer,80,"%Y-%m-%d-%H:%M,",timeinfo);
     }
 	}
   stop();
@@ -715,6 +721,10 @@ int ipv4_stat(
 
   if (log_fd) {
     fclose(log_fd);
+  }
+
+  if (stat_fd) {
+    fclose(stat_fd);
   }
 
   len = sizeof(st_item) + sizeof(struct hlist_head) * 2000;

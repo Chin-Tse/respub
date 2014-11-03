@@ -19,7 +19,7 @@
 #define IPATH_CFG     "log:input"
 #define OPATH_CFG     "log:output"
 #define RESULT_CFG    "log:result"
-#define RESULT_NUM    "log:result_flile_num"
+#define RESULT_NUM    "log:result_file_num"
 #define OUTFILE_NUM   "log:out_file_num"
 #define TIME_CFG      "time:interval"
 

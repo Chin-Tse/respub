@@ -5,9 +5,9 @@ pkg_dir=ipv4_log
 bin_file=$pkg_dir/bin/$base_name
 cfg_file=$pkg_dir/etc/config.txt
 service_script=$pkg_dir/etc/$base_name
-ins_dir=/usr/local/$pkg_dir
+prefix=/usr/local
+ins_dir=$prefix/$pkg_dir
 run_bin=$ins_dir/bin/$base_name
-
 
 
 stop_running()
@@ -56,24 +56,24 @@ install_package()
 install_check()
 {
 	if [ ! -d $ins_dir ];then
-		echo "$base_name install fail!"
+		echo "Errcode:D, $base_name install fail!"
     return;
 	fi
 
-	if [ ! -x $ins_dir/bin/$base_name ];then
-		echo "$base_name install fail!"
+	if [ ! -x $prefix/$bin_file ];then
+		echo "Errcode:B, $base_name install fail!"
 		rm -rf $ins_dir
     return;
 	fi
 
-  if [ ! -x $ins_dir/etc/$cfg_file ];then
-		echo "$base_name install fail!"
+  if [ ! -f $prefix/$cfg_file ];then
+		echo "Errcode:C, $base_name config file install fail!"
 		rm -rf $ins_dir
     return;
 	fi
 
 	if [ ! -x /etc/init.d/$base_name ];then
-		echo "$base_name install fail!"
+		echo "Errcode:S, $base_name install fail!"
 		/sbin/chkconfig $base_name off
 		if [ -f /etc/init.d/$base_name ];then
 			rm -f /etc/init.d/$base_name
@@ -83,7 +83,7 @@ install_check()
 		fi
     return;
 	fi
-  echo "ConfigFile locate in $ins_dir/etc/$cfg_file."
+  echo "ConfigFile locate in $prefix/$cfg_file ."
 	echo "$base_name install successful!"
 }
 

@@ -21,7 +21,6 @@ LDFLAGS += $(patsubst %, -l%, $(LIBSRC))
 LDFLAGS	+= -lpthread -lrt
 
 VERSION=`svn info 2>&1 | awk '{if($$1=="Revision:")print $$2}'`
-CFLAGS += -DSVNVER=$(VERSION)
 
 SOURCE  := $(wildcard $(TOPDIR)/$(SRCDIR)/*.c)
 OBJDIR 	:= obj

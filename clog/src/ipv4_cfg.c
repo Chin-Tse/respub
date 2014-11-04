@@ -14,16 +14,20 @@
 #include "strsplit.h"
 
 #define DEF_OLEN    (12)
-#define CFG_FILE    "./config.txt"
-#define IPATH_CFG    "path:input"
-#define OPATH_CFG    "path:output"
-#define RESULT_CFG   "path:result"
-#define TIME_CFG     "time:interval"
+#define CFG_FILE      "./config.txt"
+#define CFG_FILE2      "/usr/local/ipv4_log/etc/config.txt"
+#define IPATH_CFG     "log:input"
+#define OPATH_CFG     "log:output"
+#define RESULT_CFG    "log:result"
+#define RESULT_NUM    "log:result_file_num"
+#define OUTFILE_NUM   "log:out_file_num"
+#define TIME_CFG      "time:interval"
 
-#define IFMT_CFG    "log-format"
-#define OFMT_CFG    "outlog-format"
-#define AGRP_CFG    "auto-grp"
-#define SGRP_CFG    "spc-grp"
+#define IFMT_CFG      "log-format"
+#define OFMT_CFG      "outlog-format"
+#define AGRP_CFG      "auto-grp"
+#define SGRP_CFG      "spc-grp"
+#define HASH_CFG      "hash-size"
 
 #define KEY_OFFSET(key)  offsetof(ilog_t, key)
 #define KEY_ILEN(key)    sizeof(((ilog_t*)0)->key)
@@ -41,7 +45,7 @@ kattr_map_t key_attr_map[] = {
   {"dport", KEY_OFFSET(dport), KEY_ILEN(dport), DEF_OLEN, ipv4_parse_uint16,
   0,0, ipv4_parse_uint16_str, 800},
   {"proto_num", KEY_OFFSET(proto_num), KEY_ILEN(proto_num), DEF_OLEN, ipv4_parse_uint8,
-  0,0, ipv4_parse_uint8_str, 100},
+  0,0, ipv4_parse_proto_str, 100},
   {"ifname", KEY_OFFSET(ifname), KEY_ILEN(ifname), DEF_OLEN, ipv4_parse_str,
   0,0,ipv4_parse_str2str, 50},
 
@@ -129,11 +133,13 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
   }
 
   INIT_HLIST_NODE(&stm->hn);
-  INIT_LIST_HEAD(&stm->kst_list);
   INIT_LIST_HEAD(&stm->olist);
+  INIT_LIST_HEAD(&stm->next_olist);
   stm->tm = 0;
   stm->curkst = kst;
   if (kst->next) {
+    stm->hlist = calloc(1, sizeof(struct hlist_head) * kst->next->size);
+#if 0
     /* ref list */
     nkst = ipv4_cfg_kst_ref(kst->next);
     list_add_tail(&nkst->list, &stm->kst_list);
@@ -144,6 +150,7 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
       nnkst = ipv4_cfg_kst_ref(pos);
       list_add_tail(&nnkst->list, &stm->kst_list);
     } 
+#endif
   }
 
   return stm;
@@ -156,15 +163,18 @@ st_item *ipv4_cfg_stm_malloc(key_st_t *kst)
  */
 void ipv4_cfg_stm_free(st_item *stm, int olist)
 {
-  key_st_t  *kst, *n;
+  st_item   *pstm;
   st_item   *nstm;
+  st_item   *hstm;
+
+  struct hlist_node *pos, *n;  
+  struct hlist_head *hh;
 
   if (stm == NULL) {
     return;
   }
 
-  /* remove itself from hlist */
-  kst = stm->curkst;
+  /* o speedup list */
   if (olist && !list_empty(&stm->olist)) {
     if (stm->hn.next) {
       nstm = hlist_entry(stm->hn.next, st_item, hn);
@@ -176,11 +186,22 @@ void ipv4_cfg_stm_free(st_item *stm, int olist)
   
   hlist_del(&stm->hn);
 
-  /* del sub kst instance */
-  list_for_each_entry_safe(kst, n, &stm->kst_list, list) {
-    ipv4_cfg_kst_release(kst);
+  /* del sub stm instance */
+  if (list_empty(&stm->next_olist)) {
+    if (stm->hlist) {
+      free(stm->hlist);
+    }
+    free(stm);
+    return;
   }
-
+  list_for_each_entry_safe(pstm, nstm, &stm->next_olist, olist) {
+    hh = (struct hlist_head *)pstm->hn.pprev;
+    hlist_for_each_entry_safe(hstm, pos, n, hh, hn) {
+      ipv4_cfg_stm_free(hstm, 0);
+    }
+  }
+  
+  free(stm->hlist);
   free(stm);
 
   return;
@@ -436,9 +457,7 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
         if (msk >= 32) {
           kst->mask = 0;
         } else {
-          //kst->mask =  ~((1 << ((kst->ilen << 3)- msk)) - 1);
           kst->mask =  ((1 << msk) - 1);
-          printf("=3=%s, %s, %d,0x%08x\n", psmsk, val, msk, kst->mask);
         }
       }
     }
@@ -449,7 +468,6 @@ st_item *ipv4_cfg_kst_stm_init(key_st_t *kst, char *key, char *val)
     }
     hash = ipv4_cfg_hash(stm->data, kst->ilen, kst->size);
     kst->cfgstm = stm;
-    stm->type = KST_SPEC;
     hlist_add_head(&stm->hn, &kst->hlist[hash]);
     list_add_tail(&stm->olist, &kst->olist);
   }
@@ -712,9 +730,9 @@ err:
  */
 key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg)
 {
-  int         i, j;
+  int         i, j, k;
   key_st_t    *tkst = NULL;
-  key_st_t    *kst, *okst;
+  key_st_t    *kst, *okst, *akst;
   dictionary  *ifmt_cfg;
   acfg_item_t *acfg_item = NULL;
   st_item     *stm = NULL;
@@ -728,6 +746,8 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
 
   /* generate config kst-list */
   okst = NULL;
+  akst = NULL;
+  j = 0;
   for (i = 0; i < num; i++) {
     if (iniparser_find_entry(ifmt_cfg, keys[i])) {
       kst = ipv4_cfg_kst_malloc(keys[i]);
@@ -743,10 +763,10 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
       }
       okst = kst;
 
-      kst->kst_type = KST_SPEC;
       if (ipv4_cfg_kst_init(kst, keys[i])) {
         goto err;
       }
+      kst->kst_type = KST_SPEC;
       continue;
     } else {
       if (!strcmp(keys[i], "action")) {
@@ -755,6 +775,23 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
         } else {
           action = 1;
         }
+        /* update action */
+        if (!tkst) {
+          continue;
+        }
+        if (!akst) {
+          akst = tkst;
+        }
+        for (; j < i; j++) {
+          if (akst->kst_type == KST_SPEC) {
+            akst->action = action;
+          }
+          if (akst->next) {
+            akst = akst->next;
+          }
+        }
+        j = i + 1;
+        continue;
       }
       acfg_item = ipv4_cfg_aitem_get(keys[i], vals[i]);
       kst = ipv4_cfg_aitem_add(tkst, acfg_item);
@@ -764,20 +801,8 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
     }
   }
 
-  /* update kst action */
-  if (action) {
-    kst = tkst;
-    while (kst) {
-      if (kst->kst_type == KST_SPEC) {
-        kst->action = action;
-      }
-      kst = kst->next;
-    }
-  }
-
   /* kst-list is ready, add special stm */
   kst = tkst;
-  okst = kst;
   for (i = 0; i < num; i++) {
     if (iniparser_find_entry(ifmt_cfg, keys[i])) {
       if (!kst) {
@@ -790,19 +815,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
         fprintf(stderr, "Add config stm fail!\n");
         break;
       }
-
-      if (okst != kst) {
-        okst->opt = kst->opt;
-        okst->mask = kst->mask;
-        okst->cfgstm = kst->cfgstm;
-      }
-
-      if (!list_empty(&stm->kst_list)) {
-        kst = list_first_entry(&stm->kst_list, key_st_t, list);
-        okst = okst->next;
-      } else {
-        kst = NULL;
-      }
+      kst = stm->curkst->next;
     } else {
       if (strcmp(keys[i], "action")) {
         break;
@@ -886,6 +899,44 @@ kattr_map_t *ipv4_cfg_kattr_get(const char *key)
   return NULL;
 }
 
+void ipv4_cfg_kattr_hash_update(dictionary *dcfg)
+{
+  dictionary    *hash_cfg = NULL;
+  char          **keys = NULL;
+  kattr_map_t   *kattr = NULL;
+  int           i, hsize, size;
+
+  hash_cfg = iniparser_str_getsec(dcfg, HASH_CFG);
+  if (!hash_cfg) {
+    return;
+  }
+  
+  hsize = iniparser_getsecnkeys(dcfg, HASH_CFG);
+  keys = iniparser_getseckeys(dcfg, HASH_CFG);
+  
+  for (i = 0; i < hsize; i++) {
+    kattr = ipv4_cfg_kattr_get(keys[i]);
+    if (!kattr) {
+      fprintf(stderr, "Error config keyword:%s!\n", keys[i]);
+      continue;
+    }
+    size = iniparser_getint(hash_cfg, keys[i], 0);
+    if (size == 0) {
+      continue;
+    }
+    kattr->size = size;
+    //dbg_prt("Kattr:%s, hash-size:%d update.\n", kattr->kname, kattr->size);
+    fprintf(stdout, "%s update hash-size:%d.\n", kattr->kname, kattr->size);
+  }
+
+  if (keys) {
+    free(keys);
+    keys = NULL;
+  }
+
+  return;
+}
+
 /**
  * @brief Init key attr map array, return ilog_kattr array
  *
@@ -908,6 +959,9 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
   if (dcfg == NULL) {
     return NULL;
   }
+
+  /* update kattr_map first */
+  ipv4_cfg_kattr_hash_update(dcfg);
 
   /* get sub config, not need to free sub-dict */
   ifmt_cfg = iniparser_str_getsec(dcfg, IFMT_CFG);
@@ -947,6 +1001,7 @@ ilog_kattr_t *ipv4_cfg_kattr_init(dictionary *dcfg)
 out:
   if (keys) {
     free(keys);
+    keys = NULL;
   }
 
   return ilog_kattr;
@@ -971,11 +1026,19 @@ dictionary *ipv4_readcfg(char *cfgname,
     return NULL;
   }
 
-  dcfg = iniparser_load(CFG_FILE);
-  if (!dcfg) {
-    goto out;
+  /*  */
+  if (access(CFG_FILE, F_OK) == 0) {
+    dcfg = iniparser_load(CFG_FILE);
+    if (!dcfg) {
+      goto out;
+    }
+  } else {
+    dcfg = iniparser_load(CFG_FILE2);
+    if (!dcfg) {
+      goto out;
+    }
   }
-
+  
   pilog_kattr = ipv4_cfg_kattr_init(dcfg);
   if (!pilog_kattr) {
     goto out;
@@ -1077,6 +1140,24 @@ int ipv4_cfg_get_interval(dictionary *dcfg)
   ti = iniparser_getint(dcfg, TIME_CFG, 60);
 
   return ti;
+}
+
+int ipv4_cfg_get_ofnum(dictionary *dcfg)
+{
+  int ofnum;
+
+  ofnum = iniparser_getint(dcfg, OUTFILE_NUM, 10);
+
+  return ofnum;
+}
+
+int ipv4_cfg_get_rfnum(dictionary *dcfg)
+{
+  int rfnum;
+
+  rfnum = iniparser_getint(dcfg, RESULT_NUM, 2);
+
+  return rfnum;
 }
 
 /**
@@ -1204,13 +1285,75 @@ void dump_ilat(ilog_kattr_t *pilat)
   return;
 }
 
-void dump_stm(key_st_t *kst, int prefix)
+void print_stm(st_item *stm, char *prestr)
+{
+  st_t        *st;
+  
+  if (!stm) {
+    return;
+  }
+  st = &stm->st;
+  printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, hlist:%p, cur:%p\n", 
+      prestr, stm->curkst->name, stm->curkst, 
+      stm->tm, stm->opt, stm->hlist, stm);
+
+  printf("%srxpkts:%u, txpkts:%u, syn:%u, "
+      "synack:%u, rxb:%lu, txb:%lu\n", 
+      prestr, st->rxpkts, st->txpkts, st->syn, 
+      st->synack, st->rxbytes, st->txbytes);
+
+  hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
+
+  return;
+}
+
+void dump_stm(st_item *stm, int prefix, int deepin)
+{
+  int         prelen;
+  char        *prestr;
+
+  st_item     *pstm, *hst, *nst;
+  struct hlist_node *pos, *n;  
+  struct hlist_head *hh;  
+
+  prelen = 1;
+  if (prefix > 0) {
+    prelen = strlen("  ") * prefix + 1;
+  }
+  
+  prestr = malloc(prelen);
+  memset(prestr, ' ', prelen - 1);
+  prestr[prelen - 1] = '\0';
+  
+  if (!stm) {
+    return;
+  }
+  
+  print_stm(stm, prestr);
+  
+  if (!deepin) {
+    free(prestr);
+    return;
+  } 
+  /* dump substm */
+  list_for_each_entry_safe(hst, nst, &stm->next_olist, olist) {
+    hh = (struct hlist_head *)hst->hn.pprev;
+    hlist_for_each_entry_safe(pstm, pos, n, hh, hn) {
+      dump_stm(pstm, prefix + 1, 1);
+    }
+  }
+
+  free(prestr);
+
+  return;
+}
+
+void dump_kst_stm(key_st_t *kst, int prefix)
 {
   int         prelen;
   char        *prestr;
   int         i;
   st_item     *stm, *hst, *nst;
-  st_t        *st;
   key_st_t    *kpos, *kn;  
 
   struct hlist_node *pos, *n;  
@@ -1245,21 +1388,7 @@ void dump_stm(key_st_t *kst, int prefix)
   list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
     hh = (struct hlist_head *)hst->hn.pprev;
     hlist_for_each_entry_safe(stm, pos, n, hh, hn) {
-      st = &stm->st;
-      printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
-          prestr, stm->curkst->name, stm->curkst, 
-          stm->tm, stm->opt, stm->type, stm);
-
-      printf("%srxpkts:%u, txpkts:%u, syn:%u, "
-          "synack:%u, rxb:%lu, txb:%lu\n", 
-          prestr, st->rxpkts, st->txpkts, st->syn, 
-          st->synack, st->rxbytes, st->txbytes);
-
-      hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
-
-      list_for_each_entry(kpos, &stm->kst_list, list) {
-        dump_stm(kpos, prefix + 1);
-      }
+      dump_stm(stm, prefix, 1);
     }
   }
 
@@ -1279,8 +1408,6 @@ void dump_kst(key_st_t *kst, int prefix)
   int         prelen;
   char        *prestr;
   cond_t      *cpos, *cn;
-  st_item     *stm;
-  st_t        *st;
 
   if (kst == NULL) {
     return;
@@ -1295,24 +1422,15 @@ void dump_kst(key_st_t *kst, int prefix)
   memset(prestr, ' ', prelen);
   prestr[prelen - 1] = '\0';
 
-  printf("%skstname:%s, opt:%u,act:%d, %p\n", 
-      prestr, kst->name, kst->opt, kst->action, (void*)kst);
-  printf("%soffset:%u, ilen:%u, olen:%u, mask:%x, cfgstm:%p\n", 
-      prestr, kst->offset, kst->ilen, kst->olen, kst->mask, kst->cfgstm);
+  printf("%skstname:%s, opt:%u,act:%d, cur:%p, next:%p\n", 
+      prestr, kst->name, kst->opt, kst->action, (void*)kst, kst->next);
+  printf("%soffset:%u, ilen:%u, olen:%u, mask:0x%08x,"
+      "size:%d, cfgstm:%p\n", 
+      prestr, kst->offset, kst->ilen, kst->olen, kst->mask, 
+      kst->size, kst->cfgstm);
 
   if (kst->cfgstm) {
-    stm = kst->cfgstm;
-    st = &stm->st;
-    printf("%sstm:%s, curkst:%p, tm:%u, opt:%u, type:%d, %p\n", 
-        prestr, stm->curkst->name, stm->curkst, 
-        stm->tm, stm->opt, stm->type, stm);
-
-    printf("%srxpkts:%u, txpkts:%u, syn:%u, "
-        "synack:%u, rxb:%lu, txb:%lu\n", 
-        prestr, st->rxpkts, st->txpkts, st->syn, 
-        st->synack, st->rxbytes, st->txbytes);
-
-    hexprint_buf(stm->data, stm->curkst->ilen, 16, 4, prestr);
+    print_stm(kst->cfgstm, prestr);
   }
 
   /* only free in top kst */
@@ -1354,7 +1472,7 @@ void dump_config(struct list_head *cfglist)
   printf("-------------\n");
   list_for_each_entry(cfg, cfglist, list) {
     dump_kst(cfg->keyst, 0);
-    dump_stm(cfg->keyst, 0);
+    dump_kst_stm(cfg->keyst, 0);
   }
   printf("-------------\n");
 

@@ -11,19 +11,32 @@
 #include "bench.h"
 #include "ipv4_cfg.h"
 #include "ipv4_parse.h"
+#include "version.h"
 #include <pthread.h>
 #include <sys/stat.h>
 
-key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog);
 
 /* 100w lines */
 #define MAX_LOG_FILE_SIZE (1000000)
 #define MAX_LOG_FILE_NUM  (10)
+#define MAX_LOG_NAME_LEN  (120)
+#define LOG_NAME_BUF      (128)
+
+typedef enum {
+  ORIGIN_LOG,
+  STAT_LOG,
+  LOG_TYPE_NUM,
+} log_t;
 
 typedef struct r_log_ctrl_ {
   int       out;
   st_item   *stm;
 } rlog_ctl_t;
+
+typedef struct _stat_kst_stm_ {
+  key_st_t  *kst;
+  st_item   *stm;
+} rkst_stm_t;
 
 /* config list */
 struct list_head  cfg_list = LIST_HEAD_INIT(cfg_list);
@@ -35,10 +48,13 @@ dictionary        *gdcfg;
 FILE *in_fd = NULL;
 FILE *out_fd = NULL;
 FILE *result_fd = NULL;
+FILE *stat_fd =  NULL;
 
 char *in_fname = NULL;
 char *out_fname = NULL;
 char *result_fname = NULL;
+
+int   log_file_num[LOG_TYPE_NUM] = {0};
 
 /* Timer out tick, never be 0 */
 uint32_t        timeout = 1;
@@ -78,22 +94,29 @@ static void bm(char *label, void (*fn)()) {
  *
  * @return  FD -- success, NULL -- failure  
  */
-FILE *ipv4_stat_mv_logfile(FILE *log_fd)
+FILE *ipv4_stat_mv_logfile(FILE *log_fd, char *basename, log_t type)
 {
-  static int  cnt = 0;
+  static int  scnt[LOG_TYPE_NUM] = {0} ;
   static char fname[128];
   static char nfname[128];
   FILE        *tmp_file = NULL;
   int         i;
   int         len = 0;
+  int         cnt = scnt[type];
 
-  if (out_fname == NULL) {
+  if (basename == NULL) {
     return NULL;
   }
 
+  if (!log_fd) {
+    cnt = log_file_num[type];
+  }
+
+  dbg_prt("basename:%s, fd:%p, type:%d, cnt:%d\n", basename, log_fd, type, cnt);
+
   /* remove oldest file */
-  if(cnt == MAX_LOG_FILE_NUM) {
-    len = snprintf(fname, 128,"%s.%d", out_fname, cnt);
+  if(cnt == log_file_num[type]) {
+    len = snprintf(fname, 128,"%s.%d", basename, cnt);
     fname[len] = '\0';
     remove(fname);
     cnt--;
@@ -101,24 +124,26 @@ FILE *ipv4_stat_mv_logfile(FILE *log_fd)
 
   /* rename cache file */
   for (i = cnt; i >= 0; i--) {
-    len = snprintf(fname,128,"%s.%d", out_fname, i);
+    len = snprintf(fname,128,"%s.%d", basename, i);
     fname[len] = '\0';
-    len = snprintf(nfname,128,"%s.%d", out_fname,i+1);
+    len = snprintf(nfname,128,"%s.%d", basename, i+1);
     nfname[len] = '\0';
     rename(fname, nfname);
   }
 
   /* reopen  */
-  snprintf(fname, 128, "%s.0", out_fname);
+  snprintf(fname, 128, "%s.0", basename);
   tmp_file = fopen(fname, "wb");
   if(tmp_file == NULL) {
     printf("exit 1\n");
+    scnt[type]  = cnt;
     return NULL;
   }
   if (log_fd) {
     fclose(log_fd);
   }
   cnt++;
+  scnt[type]  = cnt;
 
   return tmp_file;
 }
@@ -169,7 +194,7 @@ static inline int ipv4_stat_parse(char *buf, ilog_t *ilog, ilog_kattr_t *pia)
   return 0;
 }
 
-key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
+static key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 {
   int       rv = 1;
   int       cmp = 1;
@@ -179,7 +204,6 @@ key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
 
 
   if (!kst->cfgstm) {
-    fprintf(stderr, "----Error...check cfg!----\n");
     return NULL;
   } 
 
@@ -220,24 +244,13 @@ key_st_t *ipv4_stat_kst_filter(key_st_t *kst, ilog_t *ilog)
     }
   }
 
-  /* 
-  if (kstart) {
-    return ipv4_stat_kst_match(kstart, ilog);
-  }*/
-
   return kstart;
 }
 
-key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
-  int       rv, cmp;
-  st_item   *stm;
-  st_item   *match = NULL;
+static key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
+  int       cmp;
   char      *kmem;
-  key_st_t  *kpos, *kn;
-  uint32_t  hash;
   uint32_t  tmp;
-  
-  struct hlist_node *hpos;
   
   kmem = (char *)ilog + kst->offset;
   if (kst->cfgstm) {
@@ -246,9 +259,6 @@ key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
       cmp = memcmp(kst->cfgstm->data, &tmp, kst->ilen);
     } else {
       cmp = memcmp(kst->cfgstm->data, kmem, kst->ilen);
-      if (!cmp) {
-        match = kst->cfgstm;
-      }
     }
 
     if (cmp) {
@@ -264,8 +274,31 @@ key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
     return kst->next;
   }
 
+  return NULL;
+}
+
+static inline st_item *ipv4_stat_kst_ohlist(
+    key_st_t          *kst,
+    ilog_t            *ilog,
+    struct hlist_head *hlist, 
+    struct list_head  *olist)
+{
+  st_item   *stm;
+  st_item   *match = NULL;
+  char      *kmem;
+  uint32_t  hash;
+
+  struct hlist_node *hpos;
+
+  if (!hlist || !kst) {
+    return NULL;
+  }
+
+  //dbg_prt("kst:%p, hlist:%p, size:%d\n", kst, hlist, kst->size);
+  kmem = (char *)ilog + kst->offset;
   hash = ipv4_cfg_hash(kmem, kst->ilen, kst->size);
-  hlist_for_each_entry(stm, hpos, &kst->hlist[hash], hn) {
+  
+  hlist_for_each_entry(stm, hpos, &hlist[hash], hn) {
     if (!memcmp(stm->data, kmem, kst->ilen)) {
       match = stm;
       break;
@@ -279,11 +312,11 @@ key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
     }
     match->tm = gtimestamp;
     memcpy(&match->data, kmem, kst->ilen);
-    if (!hlist_empty(&kst->hlist[hash])) {
-      hlist_add_after(kst->hlist[hash].first, &match->hn);
+    if (!hlist_empty(&hlist[hash])) {
+      hlist_add_after(hlist[hash].first, &match->hn);
     } else {
-      hlist_add_head(&match->hn, &kst->hlist[hash]);
-      list_add_tail(&match->olist, &kst->olist);
+      hlist_add_head(&match->hn, &hlist[hash]);
+      list_add_tail(&match->olist, olist);
     }
   } 
 
@@ -304,18 +337,21 @@ key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
     match->st.rxbytes = ilog->rxbytes;
   }
 
-  if (list_empty(&match->kst_list)) {
-    return NULL;
-  } else {
-    return list_first_entry(&match->kst_list, key_st_t, list);
+  if (match->hlist) {
+    return match;
   }
 
-  /* next stat 
-  list_for_each_entry(kpos, &match->kst_list, list) {
-    ipv4_stat_kst_match(kpos, ilog);
-  }*/
-
   return NULL;
+}
+
+static inline st_item *ipv4_stat_stm(st_item *stm, ilog_t *ilog) 
+{
+  return ipv4_stat_kst_ohlist(stm->curkst->next, ilog, stm->hlist, &stm->next_olist);
+}
+
+static inline st_item *ipv4_stat_kst(key_st_t *kst, ilog_t *ilog) 
+{
+  return ipv4_stat_kst_ohlist(kst, ilog, kst->hlist, &kst->olist);
 }
 
 /**
@@ -325,21 +361,31 @@ key_st_t *ipv4_stat_kst_match(key_st_t *kst, ilog_t *ilog) {
  * @param ilog [in] input log 
  *
  */
-void ipv4_stat_kst(key_st_t *kst, ilog_t *ilog)
+void ipv4_stat_cfg(key_st_t *kst, ilog_t *ilog)
 {
-  key_st_t *(*sfunc)(key_st_t *kst, ilog_t *ilog);
+  key_st_t  *(*sfunc)(key_st_t *kst, ilog_t *ilog);
+  st_item   *stm;
 
   if (!kst) {
     return;
   }
 
-  while (kst) {
-    if (kst->action) {
-      sfunc = ipv4_stat_kst_filter;
-    } else {
+  while (kst && kst->cfgstm) {
+    if (!kst->action) {
       sfunc = ipv4_stat_kst_match;
+    } else {
+      sfunc = ipv4_stat_kst_filter;
     }
     kst = sfunc(kst, ilog);
+  }
+
+  //dbg_prt("kst:%p\n", kst);
+
+  if (kst) {
+    stm = ipv4_stat_kst(kst, ilog);
+    while (stm) {
+      stm = ipv4_stat_stm(stm, ilog);
+    }
   }
 
   return;
@@ -347,16 +393,10 @@ void ipv4_stat_kst(key_st_t *kst, ilog_t *ilog)
 
 static inline int ipv4_stat_stm_chkcond(st_item *stm, cond_t *cond)
 {
-  uint32_t  *val32;
-  uint64_t  *val64;
-  cond_t    *pcond;
-
   if (cond->len > 4) {
-    val64 = (uint64_t *)((char *)(&stm->st) + cond->offset);
-    return *val64 >= cond->threshold;
+    return cond->threshold <= *(uint64_t *)((char *)(&stm->st) + cond->offset);
   } else {
-    val32 = (uint32_t *)((char *)(&stm->st) + cond->offset);
-    return *val32 >= cond->threshold;
+    return cond->threshold <= *(uint32_t *)((char *)(&stm->st) + cond->offset);
   }
 
   return 0;
@@ -396,7 +436,8 @@ void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
   char      *pbuf;
   st_t      *st;
   ipv4_unparse_f func;
-  char buf[1024];
+  static char buf[1024];
+  
   
   buf[0] = '\0';
   pbuf = buf;
@@ -438,10 +479,22 @@ void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
       st->rxpkts, st->rxbytes, st->txpkts, 
       st->txbytes, st->syn, st->synack);
   
-  if (result_fd == NULL) {
+  if (result_fname == NULL) {
     fprintf(stdout, "%s\n", buf);
   } else {
-    fprintf(result_fd, "%s\n", buf);
+    static int  total_log_item = 0;
+    FILE        *tmp_fd = NULL;
+    
+    if (!stat_fd) {
+      stat_fd = ipv4_stat_mv_logfile(NULL, result_fname, STAT_LOG);
+    }
+
+    total_log_item++; 
+    if (total_log_item > MAX_LOG_FILE_SIZE) {
+      stat_fd = ipv4_stat_mv_logfile(stat_fd, result_fname, STAT_LOG);
+    }
+
+    fprintf(stat_fd, "%s\n", buf);
   }
 
   return;
@@ -471,15 +524,68 @@ int ipv4_stat_check_aging(st_item *st)
   return 0;
 }
 
+void ipv4_stat_stm_log(st_item *stm, int lv, rlog_ctl_t *pstm, int pnr)
+{
+  int         rv;
+  cond_t      *cond;
+  key_st_t    *kst;
+  st_item     *tstm, *hst, *nst;
+  
+  struct hlist_node *pos, *n;
+  struct hlist_head *hh;  
+
+  if (lv > pnr) {
+    return;
+  }
+
+  if (stm->tm != gtimestamp) {
+    /* check for aged out */
+    if (ipv4_stat_check_aging(stm)) {
+      ipv4_cfg_stm_free(stm, 1);
+    }
+    return;
+  }
+
+  /* match condition */
+  kst = stm->curkst;
+  if (!kst->cond) {
+    return;
+  }
+  rv = ipv4_stat_stm_chkcond(stm, kst->cond);
+  if (!rv && !list_empty(&kst->cond->list)) {
+    list_for_each_entry(cond, &kst->cond->list, list) {
+      rv = ipv4_stat_stm_chkcond(stm, cond);
+      if (rv) {
+        break;
+      }
+    }
+  }
+  if (!rv) {
+    return;
+  }
+
+  pstm[lv].stm = stm;
+  if (stm->hlist) {
+    list_for_each_entry_safe(hst, nst, &stm->next_olist, olist) {
+      hh = (struct hlist_head *)hst->hn.pprev;
+      hlist_for_each_entry_safe(tstm, pos, n, hh, hn) {
+        ipv4_stat_stm_log(tstm, lv + 1, pstm, 100);
+        pstm[lv + 1].out = 0;
+      }
+    }
+  } else {
+    /* log out */
+    pstm[lv].out = 0;
+    ipv4_stat_log(pstm, lv);
+  }
+
+  return;
+} 
+
 void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
 {
   int         i;
   st_item     *stm, *hst, *nst;
-  cond_t      *cond;
-  key_st_t    *kpos;
-  key_st_t    *kstart;
-  int         rv;
-  static int  clv;
   
   struct hlist_node *pos, *n;
   struct hlist_head *hh;  
@@ -498,44 +604,8 @@ void ipv4_stat_kst_log(key_st_t *kst, int lv, rlog_ctl_t *pstm, int pnr)
   list_for_each_entry_safe(hst, nst, &kst->olist, olist) {
     hh = (struct hlist_head *)hst->hn.pprev;
     hlist_for_each_entry_safe(stm, pos, n, hh, hn) {
-      if (stm->tm != gtimestamp) {
-        /* check for aged out */
-        if (ipv4_stat_check_aging(stm)) {
-          ipv4_cfg_stm_free(stm, 1);
-        }
-        continue;
-      }
-
-      /*
-      if (!kst->cond) {
-        continue;
-      }
-      rv = ipv4_stat_stm_chkcond(stm, kst->cond);
-      if (!rv) {
-        list_for_each_entry(cond, &kst->cond->list, list) {
-          rv = ipv4_stat_stm_chkcond(stm, cond);
-          if (rv) {
-            break;
-          }
-        }
-      }
-      */
-      
-      rv = 1;
-      if (rv) {
-        pstm[lv].stm = stm;
-        if (list_empty(&stm->kst_list)) {
-          /* log out */
-          pstm[lv].out = 0;
-          ipv4_stat_log(pstm, lv);
-          continue;
-        }
-
-        list_for_each_entry(kpos, &stm->kst_list, list) {
-          ipv4_stat_kst_log(kpos, lv + 1, pstm, 100);
-          pstm[lv].out = 0;
-        }
-      }
+      ipv4_stat_stm_log(stm, lv, pstm, 100);
+      pstm[lv].out = 0;
     }
   }
 
@@ -614,13 +684,13 @@ int ipv4_stat(
   timeinfo = localtime ( &rawtime );
   strftime (buffer,80,"%Y-%m-%d-%H:%M,",timeinfo);
 
-  log_fd = ipv4_stat_mv_logfile(NULL);
+  log_fd = ipv4_stat_mv_logfile(NULL, out_fname, ORIGIN_LOG);
   start();
 	while (fgets(buf,1024,file) != NULL) {
-		total_len += 1;
+		total_len ++;
 		fprintf(log_fd, "%s%s", buffer, buf);
 		if(total_len >= MAX_LOG_FILE_SIZE) {
-			tmp_fd = ipv4_stat_mv_logfile(log_fd);
+			tmp_fd = ipv4_stat_mv_logfile(log_fd, out_fname, ORIGIN_LOG);
 			if (tmp_fd) {
 				total_len=0;
         log_fd = tmp_fd;
@@ -630,7 +700,7 @@ int ipv4_stat(
 		if(ipv4_stat_parse(buf, &info, pilat) == 0) {
       cfg_t   *cfg;
       list_for_each_entry(cfg, cfglist, list) {
-        ipv4_stat_kst(cfg->keyst, &info);
+        ipv4_stat_cfg(cfg->keyst, &info);
       }
 		}
     /* don't get time every line */
@@ -640,7 +710,7 @@ int ipv4_stat(
       gtimestamp = oldtime;
       time ( &rawtime );
       timeinfo = localtime ( &rawtime );
-      strftime (buffer,80,"%Y-%M-%d-%h:%m",timeinfo);
+      strftime (buffer,80,"%Y-%m-%d-%H:%M,",timeinfo);
     }
 	}
   stop();
@@ -648,11 +718,18 @@ int ipv4_stat(
 
 	ipv4_stat_log_out(cfglist);
   printf("------cfg:------\n");
-  dump_config(cfglist);
+  //dump_config(cfglist);
 
   if (log_fd) {
     fclose(log_fd);
   }
+
+  if (stat_fd) {
+    fclose(stat_fd);
+  }
+
+  len = sizeof(st_item) + sizeof(struct hlist_head) * 2000;
+  dbg_prt("LLLLLLLen:%x, %x\n", len, len * 65536);
 
   return 0;
 }
@@ -716,6 +793,8 @@ int ipv4_stat_create_dir(char *ofname)
 
 int main(int argc,char* argv[])
 {
+  fprintf(stdout, "IPv4 Log Version:%d\n", VERSION);
+
   gdcfg = ipv4_readcfg("./config.txt", &cfg_list, &gpilat);
 
   if (!gdcfg) {
@@ -740,7 +819,12 @@ int main(int argc,char* argv[])
     fprintf(stderr, "Error when get output file name!\n");
     return -1;
   }
+  
   fprintf(stdout, "Output Logfile: %s\n", out_fname);
+  if (strlen(out_fname) > MAX_LOG_NAME_LEN) {
+    fprintf(stderr, "Error, Output file name too long!\n");
+    return -1;
+  }
   if (!strcmp(out_fname, in_fname)) {
     fprintf(stderr, "Error, Output file is same with Input file!\n");
     return -1;
@@ -753,19 +837,21 @@ int main(int argc,char* argv[])
     fprintf(stdout, "Result file isn't set, use standard output!\n");
   } else {
     fprintf(stdout, "Result file: %s\n", result_fname);
+    if (strlen(result_fname) > MAX_LOG_NAME_LEN) {
+      fprintf(stderr, "Error, Result file name too long!\n");
+      return -1;
+    }
     if (!strcmp(result_fname, in_fname) 
         || !strcmp(result_fname, out_fname)) {
       fprintf(stderr, "Error, Result file is same with Input/Output file!\n");
       return -1;
     }
-
     (void)ipv4_stat_create_dir(result_fname);
-    result_fd = fopen(result_fname, "wb");
-    if(result_fd == NULL)	{
-      fprintf(stderr,"Error when open result file:%s\n", result_fname);
-      return -1;
-    } 
   }
+
+  /* Get file number config */
+  log_file_num[ORIGIN_LOG] = ipv4_cfg_get_ofnum(gdcfg);
+  log_file_num[STAT_LOG] = ipv4_cfg_get_rfnum(gdcfg);
 
   /* input file */
   in_fd = fopen(in_fname, "rb");
@@ -790,3 +876,4 @@ int main(int argc,char* argv[])
 
   return 0;
 }
+

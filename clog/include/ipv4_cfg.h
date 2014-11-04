@@ -29,6 +29,15 @@
 #include "list.h"
 #include "iniparser.h"
 
+#define _DEBUG_
+#ifdef _DEBUG_
+#define dbg_prt(fmt, args...) do { \
+  printf("%s.%d:"fmt, __func__, __LINE__, ##args);  \
+} while (0)
+#else
+#define dbg_prt(fmt, args...) do {} while(0)
+#endif
+
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 #define HASH_SIZE   (100)
@@ -76,30 +85,32 @@ typedef struct _stat_info_ {
 typedef struct _st_item_ st_item;
 
 /* key stat */
-typedef struct _keystat_ {
+typedef struct _key_stat_ {
   struct list_head    list;
   cond_t              *cond;              /* config st col & threshold */
-  kst_type_t          kst_type;           /*  */
   uint32_t            opt;                /*  */
   uint32_t            action;
   char                *name;              /* key name */
-  struct _keystat_    *next;              /* next key */
+  struct _key_stat_   *next;              /* next key */
   uint32_t            offset;             /* key offset from loginfo */
   uint32_t            ilen;               /* key len */
   uint32_t            mask;               /* imask */
   uint32_t            olen;               /* output space */
   ipv4_unparse_f      upfunc;
   st_item             *cfgstm;
-  uint32_t            size;
   struct list_head    olist;
+  uint32_t            size;
+  kst_type_t          kst_type;
   struct hlist_head   hlist[0];   /* st item hash */
 } key_st_t;
 
 /* common stat item */
 struct _st_item_ {
   struct hlist_node   hn; 
-  struct list_head    kst_list;       /* next key_st */
-  struct list_head    olist;          /* next key_st */
+  struct list_head    kst_list;       /*  */
+  struct list_head    olist;          /* next stm hlist */
+  struct list_head    next_olist;     /* next stm hlist */
+  struct hlist_head   *hlist;
   key_st_t            *curkst;
   st_t                st;             /* stat info */
   uint32_t            opt;
@@ -226,7 +237,8 @@ char *ipv4_cfg_get_ifile(dictionary *dcfg);
 char *ipv4_cfg_get_ofile(dictionary *dcfg);
 char *ipv4_cfg_get_rfile(dictionary *dcfg);
 int ipv4_cfg_get_interval(dictionary *dcfg);
-
+int ipv4_cfg_get_ofnum(dictionary *dcfg);
+int ipv4_cfg_get_rfnum(dictionary *dcfg);
 /**
  * @brief Displays data as hexadecimal data
  *
@@ -243,7 +255,8 @@ void hexprint_buf(
     uint32_t group,
     char *prestr);
 
-void dump_stm(key_st_t *kst, int prefix);
+void dump_stm(st_item *stm, int prefix, int deepin);
+void dump_kst_stm(key_st_t *kst, int prefix);
 void dump_key_attr_map(void);
 void dump_config(struct list_head *cfglist);
 void dump_ilat(ilog_kattr_t *pilat);

@@ -24,6 +24,37 @@
 
 #include "ipv4_parse.h"
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
+typedef struct _proto_map_ {
+  uint8_t     proto;
+  char        proto_name[12];
+} proto_name_t;
+
+proto_name_t  proto_name[] = {
+  {0, "hopopt_ipv6"},
+  {1, "icmp"},
+  {2, "igmp"},
+  {3, "ggp"},
+  {4, "ipinip"},
+  {5, "st"},
+  {6, "tcp"},
+  {7, "cbt"},
+  {8, "egp"},
+  {9, "igp"},
+  {10, "brm"},
+  {11, "nvp-ii"},
+  {12, "pup"},
+  {13, "argus"},
+  {14, "emcon"},
+  {15, "xnet"},
+  {16, "chaos"},
+  {17, "udp"},
+  {18, "mux"},
+};
+
 /**
  * @brief parse iptype string to mem with uint32_t format
  *
@@ -124,6 +155,20 @@ char *ipv4_parse_uint64_str(char *mem)
   sprintf(buf, "%lu", (*(uint64_t *)mem));
 
   return buf;
+}
+
+char *ipv4_parse_proto_str(char *mem)
+{
+  static char buf[24];
+  uint8_t     proto;
+
+  proto = *(uint8_t *) mem;
+  if (proto >= ARRAY_SIZE(proto_name)) {
+    sprintf(buf, "%u", proto);
+    return buf;
+  } else {
+    return proto_name[proto].proto_name;
+  }
 }
 
 char *ipv4_parse_uint32_str(char *mem)

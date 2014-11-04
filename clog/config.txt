@@ -1,9 +1,32 @@
-########## user config region ###########
-[path]
-  #input=/home/see/clog/ipv4.log
-  input=./ipv4_log_0
-  output=./pkstat
-  result=./stat0
+# 配置变更需要重启服务生效
+########## Common config region ###########
+[log]
+  # 1、配置报文统计输入源，当统计本地log文件时，设置为本地文件路径
+  # 需要注意的是本地文件的格式需要和'log-format'中配置的格式一致。
+  # 2、实时统计系统报文，则将input设置为/proc/net/ipv4_log
+
+  input = /proc/net/ipv4_log
+  
+  # output 报文转储
+  # 每个文件100W 条记录，约120M 
+  # eg1.被统计报文的基本信息将被报文到/var/log/下，以pklog做文件名前缀
+  #   output = /var/log/pklog，
+  #   该配置将在/var/log/下逆时间顺序生成 pklog.0、pklog.1...
+
+  output = /var/log/pklog
+
+  # result统计结果输出
+  # 同报文转储output设置
+
+  result = /var/log/pkstat 
+
+  # 文件数量控制
+  # 分别控制output和result输出文件数目
+
+  out_file_num = 10
+  result_file_num = 10
+
+  ip_conntrack_max = 300000
 
 [time]
 #统计结果检查输出的时间间隔
@@ -32,7 +55,7 @@ interval = 60
     #   dstip = 172.16.0.149
     #   action = drop
     # 该配置区域可以为空，默认统计所有报文。
-    
+   
     #分组统计配置
     #约束：名称(agrp_qq)不能和以下'log-format'字段内关键字重名， 
     #      值段中关键字则需要是'log-format'字段内关键字
@@ -51,18 +74,17 @@ interval = 60
     #proto_num:udp
     #  dport:6000
     #    dstip:172.16.0.149,rxpkts:614, rxbytes:1462548, txpkts:61, txbytes:35136, syn:0, synack:0
-
+    
     agrp_qq = proto_num, dport, dstip | rxpkts | 1
 
-  # diffrent config item should not take a repeated name
-  # otherwise it cause fault Error
-
-
-########## Innercfg:don't change this region ###########
-# this domain define the log file format
-# specify names for cols used by cfgitem latter
-# names should not be changed
-# 192.168.26.93,51889,172.16.0.93,6000,udp,17,em1,recv,10,2220,send,1,250,syn,0,syn+ack,0,code,0,type,0,0
+########## Advanced Configuration ###########
+# 'log-format' 区域定义输入文件格式。
+# 输入文件格式为cvs格式，列间以逗号分隔
+# 以下区域指定各个关注内容所在的列。 
+# eg1. 指定srcip信息所在的列
+#   一行log的内容如：192.168.26.93,51889,172.16.0.93,6000,udp,17,em1,recv,10,2220,send,1,250,syn,0,syn+ack,0,code,0,type,0,0
+#   源ip信息在第1列则：
+#   srcip = 0
 [log-format]
   srcip=0
   sport=1
@@ -78,6 +100,7 @@ interval = 60
   syn=14
   synack=16
 
+# 暂预留
 # specify how much space take for each item
 # eg. 'srcip=16' would be used like %16s when output srcip content
 [outlog-format]
@@ -95,7 +118,15 @@ interval = 60
   syn=10
   synack=10
 
-########## Innercfg : End     ###########
-
-
+# 哈希配置
+# 通过该配置可平衡不同场景下内存消耗和统计性能表现
+# Use this domain to blance memory used and performance
+[hash-size]
+  dport=2000
+  proto_num=200
+  dstip=200
+  ifname=6
+  srcip=2000
+  sport=200
+########## Advanced Configuration end #######
  

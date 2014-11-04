@@ -62,8 +62,6 @@ clean:
 
 veryclean:
 	$(RM) $(OBJS) libastr.a libastr.so*
-	rm -rf ./html ; mkdir html
-	cd test ; $(MAKE) veryclean
 
 check: default
 	@(cd test ; $(MAKE))

@@ -72,7 +72,7 @@ $(CMLIBS):
 
 $(CLN_LIBS):
 	$(MAKE) -C $(patsubst _clean_%, %, $@) PREFIX=$(LIBPRE) uninstall
-	$(MAKE) -C $(patsubst _clean_%, %, $@) PREFIX=$(LIBPRE) clean
+	$(MAKE) -C $(patsubst _clean_%, %, $@) PREFIX=$(LIBPRE) veryclean
 
 clean: $(CLN_LIBS)
 	rm -rf $(INCDIR)/version.h

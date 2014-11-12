@@ -92,7 +92,7 @@ static void strstrip(char * s)
   @return   int Number of entrys found in dictionary
  */
 /*--------------------------------------------------------------------------*/
-int iniparser_getentnum(dictionary * d)
+int iniparser_get_entnum(dictionary * d)
 {
     if (d==NULL) return 0;
 

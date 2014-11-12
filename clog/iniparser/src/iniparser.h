@@ -38,7 +38,7 @@ extern "C" {
   @return   int Number of entrys found in dictionary
  */
 /*--------------------------------------------------------------------------*/
-int iniparser_getentnum(dictionary * d);
+int iniparser_get_entnum(dictionary * d);
 /*-------------------------------------------------------------------------*/
 
 /**
@@ -319,21 +319,39 @@ void iniparser_freedict(dictionary * d);
 
 /*--------------------------------------------------------------------------*/
 /**
-  @brief    Get sub dict
-  @param    d Dictionary
+  @brief    Get sub dict spycify by keyname
+  @param    d Parent Dictionary
   @param    key sub dict's key
   @return   Pointer to sub-dictionary or NULL
-
-  Free all memory associated to an ini dictionary.
-  It is mandatory to call this function before the dictionary object
-  gets out of the current context.
  */
 dictionary *iniparser_str_getsec(dictionary *d, const char *key);
 /*--------------------------------------------------------------------------*/
 
+/*--------------------------------------------------------------------------*/
+/**
+  @brief    Get sub dict spycify by keyname
+  @param    d Parent Dictionary
+  @param    key sub dict's index
+  @return   Pointer to sub-dictionary or NULL
+ */
 dictionary *iniparser_idx_getsec(dictionary *d, int idx);
+/*--------------------------------------------------------------------------*/
 
+/*--------------------------------------------------------------------------*/
+/**
+  @brief    Get the vals in a section of a dictionary.
+  @param    d   Dictionary to examine
+  @param    s   Section name of dictionary to examine
+  @return   pointer to statically allocated character strings
+
+  This function queries a dictionary and finds all vals in a given section.
+  Each pointer in the returned char pointer-to-pointer is pointing to
+  a string allocated in the dictionary; do not free or modify them.
+
+  This function returns NULL in case of error.
+ */
 char ** iniparser_getsecvals(dictionary * d, char * s);
+/*--------------------------------------------------------------------------*/
 
 #ifdef __cplusplus
 }

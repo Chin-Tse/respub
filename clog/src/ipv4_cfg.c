@@ -34,6 +34,8 @@
 #define ST_OFFSET(key)  offsetof(st_t, key)
 #define ST_ILEN(key)    sizeof(((st_t*)0)->key)
 
+void dump_kst(key_st_t *kst, int prefix);
+
 /* domain cfg arry */
 kattr_map_t key_attr_map[] = {
   {"srcip", KEY_OFFSET(srcip), KEY_ILEN(srcip), DEF_OLEN, ipv4_parse_ip,
@@ -769,7 +771,8 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
       kst->kst_type = KST_SPEC;
       continue;
     } else {
-      if (!strcmp(keys[i], "action")) {
+      k = strlen("action");
+      if (!strncmp(keys[i], "action", k)) {
         if (!strcmp(vals[i], "accept")) {
           action = 0;
         } else {
@@ -782,6 +785,11 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
         if (!akst) {
           akst = tkst;
         }
+
+        if (akst->next) {
+          akst = akst->next;
+        }
+
         for (; j < i; j++) {
           if (akst->kst_type == KST_SPEC) {
             akst->action = action;
@@ -817,7 +825,7 @@ key_st_t *ipv4_cfg_item_init(int num, char **keys, char **vals, dictionary *dcfg
       }
       kst = stm->curkst->next;
     } else {
-      if (strcmp(keys[i], "action")) {
+      if (strncmp(keys[i], "action", strlen("action"))) {
         break;
       }
     }
@@ -925,7 +933,6 @@ void ipv4_cfg_kattr_hash_update(dictionary *dcfg)
       continue;
     }
     kattr->size = size;
-    //dbg_prt("Kattr:%s, hash-size:%d update.\n", kattr->kname, kattr->size);
     fprintf(stdout, "%s update hash-size:%d.\n", kattr->kname, kattr->size);
   }
 
@@ -1425,9 +1432,9 @@ void dump_kst(key_st_t *kst, int prefix)
   printf("%skstname:%s, opt:%u,act:%d, cur:%p, next:%p\n", 
       prestr, kst->name, kst->opt, kst->action, (void*)kst, kst->next);
   printf("%soffset:%u, ilen:%u, olen:%u, mask:0x%08x,"
-      "size:%d, cfgstm:%p\n", 
+      "size:%d, cfgstm:%p, kstype:%d\n", 
       prestr, kst->offset, kst->ilen, kst->olen, kst->mask, 
-      kst->size, kst->cfgstm);
+      kst->size, kst->cfgstm, kst->kst_type);
 
   if (kst->cfgstm) {
     print_stm(kst->cfgstm, prestr);

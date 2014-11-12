@@ -5,20 +5,22 @@
   # 需要注意的是本地文件的格式需要和'log-format'中配置的格式一致。
   # 2、实时统计系统报文，则将input设置为/proc/net/ipv4_log
 
-  input = /proc/net/ipv4_log
+  #input = /proc/net/ipv4_log
+  input = ipv4_log_0
   
   # output 报文转储
   # 每个文件100W 条记录，约120M 
   # eg1.被统计报文的基本信息将被报文到/var/log/下，以pklog做文件名前缀
   #   output = /var/log/pklog，
   #   该配置将在/var/log/下逆时间顺序生成 pklog.0、pklog.1...
-
-  output = /var/log/pklog
+  
+  #output = /var/log/pklog
+  output = pklog
 
   # result统计结果输出
   # 同报文转储output设置
 
-  result = /var/log/pkstat 
+  result = pkstat 
 
   # 文件数量控制
   # 分别控制output和result输出文件数目
@@ -41,16 +43,17 @@ interval = 60
     # 统计报文匹配/过滤条件设置区域
     # 该区域的条件设置关键字必须为 'log-format'中列出的关键字名称
     # eg1.0. 匹配tcp报文：
-    #   proto_num = 17
-    #   action = accept
+       proto_num = !6
+       dport = 138
+       action1 = drop 
     # eg1.1. 在tcp报文中，不统计（过滤）源端口为80并且源ip为172.16.0.0/24网段的报文，在eg1.0的配置之后增加：
     # 	sport=80
     #   srcip=172.16.0.0/24
     #   action=drop
     # eg2.0 统计目的ip不为172.16.0.149的报文：
     #   可以：
-    #   dstip = !172.16.0.149
-    #   action = accept
+       dstip = 172.16.0.149
+       action2 = accept
     #   或:
     #   dstip = 172.16.0.149
     #   action = drop

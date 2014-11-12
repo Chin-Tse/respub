@@ -492,6 +492,7 @@ void ipv4_stat_log(rlog_ctl_t *pstm, int lv) {
     total_log_item++; 
     if (total_log_item > MAX_LOG_FILE_SIZE) {
       stat_fd = ipv4_stat_mv_logfile(stat_fd, result_fname, STAT_LOG);
+      total_log_item = 0;
     }
 
     fprintf(stat_fd, "%s\n", buf);
